@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <base target="_top">
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <style>
+        body { padding: 20px; font-family: Arial, sans-serif; }
+        .select2-container .select2-selection--multiple { border: 1px solid #ced4da; }
+        .loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.8); z-index: 9999; display: flex; justify-content: center; align-items: center; }
+        
+        /* Clases para controlar las vistas */
+        #resultados-vista { display: none; } /* Oculta la vista de resultados por defecto */
+        #tabla-container { max-height: 400px; overflow: auto; }
+        table { font-size: 0.9em; }
+    </style>
+</head>
+<body>
+    <!-- 1. VISTA DEL BUSCADOR (INICIALMENTE VISIBLE) -->
+    <div id="buscador-vista">
+        <div class="container">
+            <!-- PASO 1 -->
+            <div id="paso1">
+                <h4>Paso 1: Selecciona el método de búsqueda</h4>
+                <div class="list-group">
+                    <button type="button" class="list-group-item list-group-item-action" onclick="seleccionarMetodo('referencia')">🔎 Por Referencia(s)</button>
+                    <button type="button" class="list-group-item list-group-item-action" onclick="seleccionarMetodo('analista')">👤 Por Analista(s)</button>
+                    <button type="button" class="list-group-item list-group-item-action" onclick="seleccionarMetodo('desarrollo')">🏢 Por Desarrollo(s)</button>
+                </div>
+            </div>
+
+            <!-- PASO 2 -->
+            <div id="paso2" style="display: none;">
+                <h4 id="paso2-titulo">Paso 2: Ingresa los valores</h4>
+                <div id="input-container" class="form-group"></div>
+                <button class="btn btn-secondary" onclick="mostrarPaso(1)">Regresar</button>
+                <button class="btn btn-primary" onclick="mostrarPaso3()">Siguiente</button>
+            </div>
+
+            <!-- PASO 3 -->
+            <div id="paso3" style="display: none;">
+                <h4>Paso 3: Afina tu búsqueda</h4>
+                <!-- NUEVO: Filtro Opcional por Estatus -->
+                <div class="form-group">
+                    <label for="estatus-select"><b>Filtro opcional por Estatus General:</b></label>
+                    <select id="estatus-select" class="form-control" multiple="multiple"></select>
+                </div>
+                <hr>
+                <h6>Selecciona las columnas a mostrar:</h6>
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="checkbox" id="seleccionar-todo" onchange="toggleSeleccionarTodo(this.checked)">
+                    <label class="form-check-label font-weight-bold" for="seleccionar-todo">Seleccionar / Deseleccionar Todo</label>
+                </div>
+                <div id="columnas-container" class="mb-3" style="max-height: 150px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; border-radius: 5px;"></div>
+                <hr>
+                <h4>Paso 4: Elige el formato de salida</h4>
+                <button class="btn btn-secondary" onclick="mostrarPaso(2)">Regresar</button>
+                <button class="btn btn-info" onclick="ejecutarBusqueda('tabla')">📋 Ver en Pantalla</button>
+                <button class="btn btn-success" onclick="ejecutarBusqueda('excel')">📄 Exportar a Excel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. VISTA DE RESULTADOS (INICIALMENTE OCULTA) -->
+    <div id="resultados-vista" class="container-fluid">
+        <h4>Resultados de la Búsqueda</h4>
+        <p>Puedes seleccionar los datos de la tabla o usar el botón para copiar todo.</p>
+        <button class="btn btn-info mb-2" onclick="copiarTabla()">📋 Copiar Tabla al Portapapeles</button>
+        <div id="tabla-container">
+            <!-- La tabla generada se insertará aquí -->
+        </div>
+        <hr>
+        <button class="btn btn-primary" onclick="nuevaBusqueda()">Nueva Búsqueda</button>
+        <button class="btn btn-secondary" onclick="google.script.host.close()">Cerrar</button>
+    </div>
+
+    <!-- PANTALLA DE CARGA -->
+    <div id="loading" class="loading-overlay" style="display: none;">
+        <div class="spinner-border text-primary" role="status"></div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    <script>
+        let datosBuscador = {}, busquedaActual = {};
+
+        document.addEventListener("DOMContentLoaded", () => {
+            mostrarLoading(true);
+            google.script.run
+                .withSuccessHandler(data => {
+                    datosBuscador = data;
+                    mostrarLoading(false);
+                })
+                .withFailureHandler(err => { alert(err); google.script.host.close(); })
+                .obtenerDatosParaBuscador();
+        });
+
+        function seleccionarMetodo(metodo) {
+            busquedaActual.metodo = metodo;
+            const container = document.getElementById('input-container');
+            let html = (metodo === 'referencia')
+                ? '<label for="valor-input">Pega una o más referencias, una por línea:</label><textarea id="valor-input" class="form-control" rows="5"></textarea>'
+                : '<label for="valor-select">Selecciona uno o más valores:</label><select id="valor-select" class="form-control" multiple="multiple"></select>';
+            container.innerHTML = html;
+            document.getElementById('paso2-titulo').innerText = (metodo === 'referencia') ? 'Paso 2: Ingresa la(s) Referencia(s)' : 'Paso 2: Selecciona los valores';
+
+            if (metodo !== 'referencia') {
+                const opciones = (metodo === 'analista') ? datosBuscador.analistas : datosBuscador.desarrollos;
+                $('#valor-select').select2({ data: opciones, placeholder: 'Haz clic para seleccionar...' });
+            }
+            mostrarPaso(2);
+        }
+
+        function mostrarPaso3() {
+            const valores = (busquedaActual.metodo === 'referencia')
+                ? $('#valor-input').val().trim().split('\n').filter(Boolean)
+                : $('#valor-select').val();
+
+            if (!valores || valores.length === 0) {
+                alert('Debes ingresar o seleccionar al menos un valor.'); return;
+            }
+            busquedaActual.valores = valores;
+
+            // Llenar el dropdown de Estatus
+            $('#estatus-select').empty().select2({
+                data: datosBuscador.estatus,
+                placeholder: 'Todos los estatus (o selecciona para filtrar)',
+                allowClear: true
+            });
+
+            const container = document.getElementById('columnas-container');
+            container.innerHTML = datosBuscador.columnas.map((col, index) =>
+                `<div class="form-check"><input class="form-check-input col-checkbox" type="checkbox" value="${col}" id="col-${index}" checked><label class="form-check-label" for="col-${index}">${col}</label></div>`
+            ).join('');
+            document.getElementById('seleccionar-todo').checked = true;
+            mostrarPaso(3);
+        }
+
+        function ejecutarBusqueda(formato) {
+            mostrarLoading(true);
+            busquedaActual.columnas = Array.from(document.querySelectorAll('.col-checkbox:checked')).map(cb => cb.value);
+            if (busquedaActual.columnas.length === 0) {
+                alert('Debes seleccionar al menos una columna.');
+                mostrarLoading(false); return;
+            }
+            // Recoger los estatus seleccionados
+            busquedaActual.estatus = $('#estatus-select').val();
+
+            if (formato === 'excel') {
+                google.script.run
+                    .withSuccessHandler(() => google.script.host.close())
+                    .withFailureHandler(err => { mostrarLoading(false); alert(err); })
+                    .exportarBusquedaAExcel(busquedaActual);
+            } else { // formato === 'tabla'
+                google.script.run
+                    .withSuccessHandler(tablaHtml => {
+                        document.getElementById('tabla-container').innerHTML = tablaHtml;
+                        document.getElementById('buscador-vista').style.display = 'none';
+                        document.getElementById('resultados-vista').style.display = 'block';
+                        mostrarLoading(false);
+                    })
+                    .withFailureHandler(err => { mostrarLoading(false); alert(err); })
+                    .ejecutarBusquedaAvanzada(busquedaActual);
+            }
+        }
+
+        function nuevaBusqueda() {
+            document.getElementById('resultados-vista').style.display = 'none';
+            document.getElementById('buscador-vista').style.display = 'block';
+            mostrarPaso(1);
+        }
+        
+        function copiarTabla() {
+            const el = document.createElement('textarea');
+            let textoTabla = Array.from(document.querySelectorAll('th')).map(th => th.innerText).join('\t') + '\n';
+            document.querySelectorAll('tbody tr').forEach(tr => {
+                textoTabla += Array.from(tr.querySelectorAll('td')).map(td => td.innerText).join('\t') + '\n';
+            });
+            el.value = textoTabla.trim();
+            document.body.appendChild(el);
+            el.select();
+            document.execCommand('copy');
+            document.body.removeChild(el);
+            alert('¡Tabla copiada al portapapeles!');
+        }
+
+        function mostrarPaso(numPaso) {
+            $('#buscador-vista .container > div').hide();
+            $(`#paso${numPaso}`).show();
+        }
+
+        function toggleSeleccionarTodo(checked) {
+            $('.col-checkbox').prop('checked', checked);
+        }
+
+        function mostrarLoading(mostrar) {
+            $('#loading').toggle(mostrar);
+        }
+    </script>
+</body>
+</html>

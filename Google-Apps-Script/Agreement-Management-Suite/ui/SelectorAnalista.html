@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+      body { padding: 20px; }
+      #loading-spinner {
+        display: none;
+        margin-left: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h4>Generar Acuse de Convenios</h4>
+      <p>Seleccione los analistas de quienes desea generar el acuse. Se incluirán todos los convenios pendientes registrados por ellos.</p>
+      
+      <form id="analista-form">
+        <div id="analista-list" class="mb-3">
+          <p>Cargando analistas...</p>
+        </div>
+        
+        <button type="submit" class="btn btn-primary">
+          Generar Acuse
+          <div id="loading-spinner" class="spinner-border spinner-border-sm text-light" role="status">
+            <span class="sr-only">Loading...</span>
+          </div>
+        </button>
+        <button type="button" class="btn btn-secondary" onclick="google.script.host.close()">Cancelar</button>
+      </form>
+    </div>
+
+    <script>
+      document.addEventListener("DOMContentLoaded", function() {
+        google.script.run.withSuccessHandler(mostrarAnalistas).obtenerAnalistasConPendientes();
+      });
+
+      function mostrarAnalistas(analistas) {
+        const container = document.getElementById('analista-list');
+        if (!analistas || analistas.length === 0) {
+          container.innerHTML = '<div class="alert alert-warning">No se encontraron convenios pendientes de acuse para ningún analista.</div>';
+          document.querySelector('button[type="submit"]').disabled = true;
+          return;
+        }
+
+        let html = '';
+        analistas.forEach(function(nombre, index) {
+          html += `
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" value="${nombre}" id="analista-${index}">
+              <label class="form-check-label" for="analista-${index}">
+                ${nombre}
+              </label>
+            </div>
+          `;
+        });
+        container.innerHTML = html;
+      }
+
+      document.getElementById('analista-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const selectedAnalistas = [];
+        const checkboxes = document.querySelectorAll('#analista-list input[type="checkbox"]:checked');
+        
+        if (checkboxes.length === 0) {
+          alert('Por favor, seleccione al menos un analista.');
+          return;
+        }
+
+        checkboxes.forEach(function(checkbox) {
+          selectedAnalistas.push(checkbox.value);
+        });
+        
+        document.querySelector('button[type="submit"]').disabled = true;
+        document.getElementById('loading-spinner').style.display = 'inline-block';
+
+        google.script.run
+          .withSuccessHandler(function() {
+            google.script.host.close();
+          })
+          .withFailureHandler(function(error) {
+            alert('Error: ' + error.message);
+            google.script.host.close();
+          })
+          .generarAcusePorLote(selectedAnalistas);
+      });
+    </script>
+  </body>
+</html>

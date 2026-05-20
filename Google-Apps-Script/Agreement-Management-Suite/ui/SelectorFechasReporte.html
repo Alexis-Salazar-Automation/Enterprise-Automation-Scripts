@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <base target="_top">
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <style> body { padding: 20px; } </style>
+</head>
+<body>
+    <div class="container">
+        <h4>Generar Reporte Mensual</h4>
+        <p>Seleccione el rango de fechas para generar el reporte de convenios concluidos.</p>
+        <div class="form-group">
+            <label for="fecha-inicio">Fecha de Inicio</label>
+            <input type="date" id="fecha-inicio" class="form-control">
+        </div>
+        <div class="form-group">
+            <label for="fecha-fin">Fecha de Fin</label>
+            <input type="date" id="fecha-fin" class="form-control">
+        </div>
+        <button class="btn btn-primary" id="generar-btn">Generar Reporte</button>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // --- LÓGICA PARA FECHAS POR DEFECTO ---
+            const hoy = new Date();
+            const primerDia = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+            const ultimoDia = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0);
+
+            // Función para formatear la fecha a YYYY-MM-DD
+            const formatDate = (date) => date.toISOString().split('T')[0];
+
+            document.getElementById('fecha-inicio').value = formatDate(primerDia);
+            document.getElementById('fecha-fin').value = formatDate(ultimoDia);
+            // --- FIN DE LA LÓGICA ---
+
+            document.getElementById('generar-btn').addEventListener('click', function() {
+                this.disabled = true;
+                this.innerText = "Generando...";
+                const fechas = {
+                    inicio: document.getElementById('fecha-inicio').value,
+                    fin: document.getElementById('fecha-fin').value
+                };
+                google.script.run
+                    .withSuccessHandler(() => google.script.host.close())
+                    .withFailureHandler(err => { alert(err); google.script.host.close(); })
+                    .generarReporteMensual(fechas);
+            });
+        });
+    </script>
+</body>
+</html>

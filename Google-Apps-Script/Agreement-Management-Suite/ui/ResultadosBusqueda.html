@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <base target="_top">
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { padding: 20px; }
+        #tabla-container { max-height: 400px; overflow: auto; }
+        table { font-size: 0.9em; }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <h4>Resultados de la Búsqueda</h4>
+        <p>Puedes seleccionar los datos de la tabla o usar el botón para copiar todo.</p>
+        <button class="btn btn-info mb-2" onclick="copiarTabla()">📋 Copiar Tabla al Portapapeles</button>
+        <div id="tabla-container">
+            <?!= tablaHTML ?>
+        </div>
+        <hr>
+        <button class="btn btn-secondary" onclick="google.script.host.close()">Cerrar</button>
+    </div>
+    <script>
+        function copiarTabla() {
+            // Crea un elemento de texto temporal
+            const el = document.createElement('textarea');
+            let textoTabla = '';
+            
+            // Construye el texto separado por tabulaciones (formato Excel)
+            const headers = Array.from(document.querySelectorAll('th')).map(th => th.innerText);
+            textoTabla += headers.join('\t') + '\n';
+
+            document.querySelectorAll('tbody tr').forEach(tr => {
+                const rowData = Array.from(tr.querySelectorAll('td')).map(td => td.innerText);
+                textoTabla += rowData.join('\t') + '\n';
+            });
+            
+            el.value = textoTabla.trim(); // Asigna el texto y quita espacios finales
+            document.body.appendChild(el);
+            el.select(); // Selecciona el texto
+            document.execCommand('copy'); // Copia al portapapeles
+            document.body.removeChild(el); // Elimina el elemento temporal
+            
+            alert('¡Tabla copiada al portapapeles!');
+        }
+    </script>
+</body>
+</html>

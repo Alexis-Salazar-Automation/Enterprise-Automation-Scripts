@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+      body { padding: 20px; font-family: Arial, sans-serif; }
+      #propiedades-container, #details-container, #tipo-registro-container { display: none; }
+      .no-scroll { overflow: hidden; }
+      .section-header { margin-top: 20px; color: #4285F4; border-bottom: 2px solid #eee; padding-bottom: 5px; }
+      label { font-weight: bold; }
+      .propiedad-item { display: flex; align-items: center; padding: 5px; border-bottom: 1px solid #eee; }
+      .propiedad-item input { margin-right: 15px; }
+      .propiedad-item label { margin-bottom: 0; font-weight: normal; }
+      #suggestions-box { border: 1px solid #ccc; border-top: none; max-height: 150px; overflow-y: auto; background-color: white; position: absolute; z-index: 1000; width: calc(100% - 40px); }
+      .suggestion-item { padding: 8px 12px; cursor: pointer; }
+      .suggestion-item:hover { background-color: #f0f0f0; }
+      .form-control[readonly] { background-color: #e9ecef; cursor: not-allowed; }
+      #selected-clients-container { margin-top: 10px; }
+      .client-pill { display: inline-flex; align-items: center; background-color: #e0e0e0; border-radius: 16px; padding: 5px 10px; margin: 2px; font-size: 0.9em; }
+      .client-pill .remove-client { margin-left: 8px; cursor: pointer; font-weight: bold; color: #888; }
+      #loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(255, 255, 255, 0.7); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); z-index: 9999; display: flex; justify-content: center; align-items: center; flex-direction: column; display: none; }
+      .loading-text { color: #333; font-size: 1.5em; font-weight: bold; margin-bottom: 20px;}
+      .progress { width: 60%; height: 25px; border-radius: 15px; animation: pulse-glow 2s ease-in-out infinite; }
+      @keyframes pulse-glow { 0% { box-shadow: 0 0 5px rgba(0, 123, 255, 0.5); } 50% { box-shadow: 0 0 25px rgba(0, 123, 255, 1); } 100% { box-shadow: 0 0 5px rgba(0, 123, 255, 0.5); } }
+      #seccion-busqueda:disabled {
+        opacity: 0.6;
+      }
+      #seccion-busqueda:disabled .remove-client {
+        pointer-events: none;
+        cursor: not-allowed;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <form id="convenio-form">
+        <h4 class="section-header">Registrar <span id="main-form-title">Nuevo Trámite</span></h4>
+        
+        <fieldset id="seccion-busqueda">
+            <div id="paso1-container">
+                <h5 class="text-secondary">Paso 1: Buscar Propietario</h5>
+                <div class="form-group position-relative">
+                  <label for="propietario-search">Escriba el nombre del propietario (mínimo 3 letras)</label>
+                  <input type="text" id="propietario-search" class="form-control" placeholder="Comience a escribir para agregar..." autocomplete="off">
+                  <div id="suggestions-box"></div>
+                </div>
+                <div id="selected-clients-container"></div>
+            </div>
+
+            <div id="tipo-registro-container" class="form-group bg-light p-3 border rounded mt-3">
+              <h5 class="text-secondary">Paso 2: Seleccionar Tipo de Trámite</h5>
+              <div class="form-check form-check-inline">
+                <input class="form-check-input" type="radio" name="tipoRegistro" id="tipo-convenio" value="convenio" checked>
+                <label class="form-check-label" for="tipo-convenio">Convenio</label>
+              </div>
+              <div class="form-check form-check-inline">
+                <input class="form-check-input" type="radio" name="tipoRegistro" id="tipo-negociacion" value="negociacion">
+                <label class="form-check-label" for="tipo-negociacion">Negociación / PP</label>
+              </div>
+            </div>
+        </fieldset>
+
+        <div class="form-group mt-3">
+            <button type="button" id="buscar-propiedades-btn" class="btn btn-success" disabled>Buscar Propiedades</button>
+            <button type="button" id="regresar-btn" class="btn btn-secondary" style="display: none;">Regresar</button>
+        </div>
+        <hr>
+        
+        <div id="propiedades-container">
+          <h5 class="text-secondary">Paso 3: Seleccionar Propiedades</h5>
+          <div id="propiedades-list" class="mb-3"></div>
+        </div>
+        
+        <div id="details-container">
+          <h5 class="text-secondary" id="details-title">Paso 4: Llenar Detalles</h5>
+          <p><small>Estos datos se aplicarán a TODAS las propiedades seleccionadas.</small></p>
+          <div class="form-row">
+            <div class="form-group col-md-4"><label for="gestor">Asesor Asignado</label><select id="gestor" class="form-control" required></select></div>
+            <div class="form-group col-md-4"><label for="entregaConvenio" id="fecha-registro-label">Fecha Entrega Convenio</label><input type="date" class="form-control" id="entregaConvenio"></div>
+            <div class="form-group col-md-4"><label for="fechaRecibo">Fecha Recibo</label><input type="date" class="form-control" id="fechaRecibo"></div>
+          </div>
+           <div class="form-row">
+            <div class="form-group col-md-6"><label for="fechaInicio">Fecha de Inicio</label><input type="date" class="form-control" id="fechaInicio" required></div>
+            <div class="form-group col-md-6"><label for="fechaFin">Fecha de Fin</label><input type="date" class="form-control" id="fechaFin" required></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group col-md-4" id="parciales-group"><label for="parciales">Parciales</label><input type="number" class="form-control" id="parciales" min="1"></div>
+            <div class="form-group col-md-4"><label for="monto">Adeudo total</label><input type="number" step="0.01" class="form-control" id="monto" min="0.01" required></div>
+            <div class="form-group col-md-4" id="adeudo-group"><label for="adeudo">Monto de parcialidad</label><input type="number" step="0.01" class="form-control" id="adeudo" readonly></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group col-md-4"><label for="morosidad">Morosidad (Meses)</label><input type="text" class="form-control" id="morosidad" readonly></div>
+            <div class="form-group col-md-4"><label for="ultimoPago">Último Pago</label><input type="text" class="form-control" id="ultimoPago" readonly></div>
+            <div class="form-group col-md-4"><label for="ultimaGestion">Última Gestión</label><input type="text" class="form-control" id="ultimaGestion" readonly></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group col-md-6">
+              <label for="comentario-select">Tipo de Comentario</label>
+              <select id="comentario-select" class="form-control"></select>
+            </div>
+            <div class="form-group col-md-6" id="comentario-texto-container" style="display: none;">
+              <label for="comentario">Comentario Personalizado</label>
+              <textarea class="form-control" id="comentario" rows="1"></textarea>
+            </div>
+          </div>
+        </div>
+        <input type="hidden" id="correo-ejecutivo"><input type="hidden" id="correo-supervisor"><input type="hidden" id="correo-coordinador">
+        <button type="submit" id="submit-button" class="btn btn-primary" disabled>Registrar</button>
+        <button type="button" class="btn btn-secondary" onclick="google.script.host.close()">Cancelar</button>
+      </form>
+    </div>
+
+    <div id="loading-overlay">
+      <div class="loading-text">Cargando, por favor espere...</div>
+      <div class="progress"><div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 100%;"></div></div>
+    </div>
+
+    <script>
+      const clienteSearch = document.getElementById('propietario-search');
+      const suggestionsBox = document.getElementById('suggestions-box');
+      const propiedadesContainer = document.getElementById('propiedades-container');
+      const propiedadesList = document.getElementById('propiedades-list');
+      const detailsContainer = document.getElementById('details-container');
+      const submitButton = document.getElementById('submit-button');
+      const buscarPropiedadesBtn = document.getElementById('buscar-propiedades-btn');
+      const selectedClientsContainer = document.getElementById('selected-clients-container');
+      const tipoRegistroContainer = document.getElementById('tipo-registro-container');
+      const seccionBusqueda = document.getElementById('seccion-busqueda');
+      const regresarBtn = document.getElementById('regresar-btn');
+      
+      let allClientProperties = []; 
+      let selectedClients = [];
+      let searchTimeout;
+      
+      const comentariosConvenio = [
+        { value: 'Convenio normal', text: 'Convenio normal' }, { value: 'Convenio multiple', text: 'Convenio multiple' },
+        { value: 'Convenio con domiciliación', text: 'Convenio con domiciliación' }, { value: 'Convenio con anualidad', text: 'Convenio con anualidad' },
+        { value: 'otro', text: 'Escribir o agregar comentario' }
+      ];
+      const comentariosNegociacion = [
+        { value: 'Negociación', text: 'Negociación' }, { value: 'Promesa de pago', text: 'Promesa de pago' },
+        { value: 'otro', text: 'Escribir o agregar comentario' }
+      ];
+
+      document.addEventListener("DOMContentLoaded", function() {
+        const hoy = new Date();
+        document.getElementById('entregaConvenio').value = hoy.getFullYear() + '-' + String(hoy.getMonth() + 1).padStart(2, '0') + '-' + String(hoy.getDate()).padStart(2, '0');
+        google.script.run.withSuccessHandler(cargarAsesores).obtenerDatosParaFormulario();
+        document.querySelectorAll('input[name="tipoRegistro"]').forEach(radio => radio.addEventListener('change', actualizarFormularioDinamico));
+        document.getElementById('parciales').addEventListener('input', calcularAdeudo);
+        document.getElementById('monto').addEventListener('input', calcularAdeudo);
+        document.getElementById('comentario-select').addEventListener('change', gestionarCampoComentario);
+        buscarPropiedadesBtn.addEventListener('click', buscarPropiedadesDeSeleccionados);
+        regresarBtn.addEventListener('click', regresarAPasoAnterior);
+        clienteSearch.addEventListener('keyup', handleClientSearch);
+        document.addEventListener('click', e => { if (!clienteSearch.contains(e.target) && !suggestionsBox.contains(e.target)) suggestionsBox.style.display = 'none'; });
+        document.getElementById('convenio-form').addEventListener('submit', handleFormSubmit);
+        actualizarFormularioDinamico();
+      });
+      
+      function actualizarFormularioDinamico() {
+        const esNegociacion = document.getElementById('tipo-negociacion').checked;
+        const parcialesGroup = document.getElementById('parciales-group');
+        const adeudoGroup = document.getElementById('adeudo-group');
+        const parcialesInput = document.getElementById('parciales');
+        parcialesGroup.style.display = esNegociacion ? 'none' : 'block';
+        adeudoGroup.style.display = esNegociacion ? 'none' : 'block';
+        parcialesInput.required = !esNegociacion;
+        document.getElementById('main-form-title').textContent = esNegociacion ? "Nueva Negociación / PP" : "Nuevo Convenio";
+        document.getElementById('details-title').textContent = esNegociacion ? "Paso 4: Llenar Detalles de Negociación/PP" : "Paso 4: Llenar Detalles del Convenio";
+        document.getElementById('fecha-registro-label').textContent = esNegociacion ? "Fecha de Registro" : "Fecha Entrega Convenio";
+        submitButton.textContent = esNegociacion ? "Registrar Negociación/PP" : "Registrar Convenio";
+        const comentarioSelect = document.getElementById('comentario-select');
+        const opciones = esNegociacion ? comentariosNegociacion : comentariosConvenio;
+        comentarioSelect.innerHTML = opciones.map(opt => `<option value="${opt.value}">${opt.text}</option>`).join('');
+        gestionarCampoComentario();
+      }
+
+      function gestionarCampoComentario() {
+        const comentarioSelect = document.getElementById('comentario-select');
+        document.getElementById('comentario-texto-container').style.display = (comentarioSelect.value === 'otro') ? 'block' : 'none';
+      }
+
+      function buscarPropiedadesDeSeleccionados() {
+        if (selectedClients.length === 0) {
+            alert("Por favor, seleccione al menos un propietario.");
+            return;
+        }
+        seccionBusqueda.disabled = true;
+        buscarPropiedadesBtn.style.display = 'none';
+        regresarBtn.style.display = 'inline-block';
+        showLoadingOverlay();
+        propiedadesContainer.style.display = 'block';
+        detailsContainer.style.display = 'block';
+        propiedadesList.innerHTML = '';
+        google.script.run
+            .withSuccessHandler(cargarPropiedades)
+            .withFailureHandler(function(error) {
+                hideLoadingOverlay();
+                alert("Error al buscar propiedades: " + error.message);
+                regresarAPasoAnterior();
+            })
+            .obtenerPropiedadesPorVariosClientes(selectedClients);
+      }
+
+      function regresarAPasoAnterior() {
+        seccionBusqueda.disabled = false;
+        buscarPropiedadesBtn.style.display = 'inline-block';
+        regresarBtn.style.display = 'none';
+        propiedadesContainer.style.display = 'none';
+        detailsContainer.style.display = 'none';
+        propiedadesList.innerHTML = '';
+        submitButton.disabled = true;
+      }
+
+      function showLoadingOverlay() {
+        document.body.classList.add('no-scroll');
+        document.getElementById('loading-overlay').style.display = 'flex';
+      }
+
+      function hideLoadingOverlay() {
+        document.body.classList.remove('no-scroll');
+        document.getElementById('loading-overlay').style.display = 'none';
+      }
+
+      function agregarClienteSeleccionado(nombre) {
+        if (!selectedClients.includes(nombre)) {
+            selectedClients.push(nombre);
+            renderSelectedClients();
+        }
+        clienteSearch.value = '';
+        suggestionsBox.style.display = 'none';
+        buscarPropiedadesBtn.disabled = false;
+        tipoRegistroContainer.style.display = 'block';
+        setTimeout(() => clienteSearch.focus(), 10);
+      }
+      
+      function removerClienteSeleccionado(index) {
+        selectedClients.splice(index, 1);
+        renderSelectedClients();
+        if (selectedClients.length === 0) {
+            buscarPropiedadesBtn.disabled = true;
+            tipoRegistroContainer.style.display = 'none';
+            propiedadesContainer.style.display = 'none';
+            detailsContainer.style.display = 'none';
+            submitButton.disabled = true;
+        }
+      }
+
+      function renderSelectedClients() {
+        selectedClientsContainer.innerHTML = selectedClients.map((nombre, index) => 
+            `<div class="client-pill"><span>${nombre}</span><span class="remove-client" onclick="removerClienteSeleccionado(${index})">&times;</span></div>`
+        ).join('');
+      }
+      
+      function mostrarSugerencias(clientes) {
+        suggestionsBox.innerHTML = '';
+        if (!clientes || clientes.length === 0) {
+            suggestionsBox.style.display = 'none';
+            return;
+        }
+        clientes.forEach(cliente => {
+          const div = document.createElement('div');
+          div.className = 'suggestion-item';
+          div.textContent = cliente;
+          div.onmousedown = () => agregarClienteSeleccionado(cliente);
+          suggestionsBox.appendChild(div);
+        });
+        suggestionsBox.style.display = 'block';
+      }
+
+      function handleClientSearch() {
+        clearTimeout(searchTimeout);
+        const query = this.value;
+        if (query.length < 3) {
+            suggestionsBox.style.display = 'none';
+            return;
+        }
+        searchTimeout = setTimeout(() => {
+          google.script.run
+            .withSuccessHandler(mostrarSugerencias)
+            .withFailureHandler(function(error) {
+              alert("Error al buscar clientes: " + error.message);
+            })
+            .buscarClientes(query);
+        }, 300);
+      }
+      
+      function cargarPropiedades(propiedades) {
+        hideLoadingOverlay();
+        allClientProperties = propiedades;
+        propiedadesList.innerHTML = '';
+        submitButton.disabled = true;
+        if (propiedades.length === 0) {
+          propiedadesList.innerHTML = '<p class="text-danger">Ninguno de los clientes seleccionados tiene propiedades registradas.</p>';
+          return;
+        }
+        let htmlContent = `
+          <div class="propiedad-item d-flex justify-content-between" style="border-bottom: 2px solid #ccc; margin-bottom: 5px;">
+            <div>
+              <input class="form-check-input" type="checkbox" id="seleccionar-todo" onchange="toggleAllCheckboxes(this)">
+              <label class="form-check-label font-weight-bold" for="seleccionar-todo">Seleccionar / Deseleccionar Todo</label>
+            </div>
+            <div id="selection-counter" class="text-muted"></div>
+          </div>
+        `;
+        propiedades.forEach((prop, index) => {
+          const textoOpcion = `<b>${prop.propietario}</b>: ${prop.proyecto} - ${prop.condominio} - Lote ${prop.lote}`;
+          htmlContent += `
+            <div class="propiedad-item">
+              <input class="form-check-input propiedad-checkbox" type="checkbox" value="${index}" id="prop-${index}" onchange="actualizarDatosAutocompletados()">
+              <label class="form-check-label" for="prop-${index}">${textoOpcion}</label>
+            </div>
+          `;
+        });
+        propiedadesList.innerHTML = htmlContent;
+        actualizarContadorSeleccion();
+        if (propiedades.length > 0) {
+          llenarDetallesDePropiedad(0);
+        }
+      }
+
+      function actualizarContadorSeleccion() {
+        const total = document.querySelectorAll('.propiedad-checkbox').length;
+        const seleccionados = document.querySelectorAll('.propiedad-checkbox:checked').length;
+        const contadorElemento = document.getElementById('selection-counter');
+        if (contadorElemento) {
+            contadorElemento.innerHTML = `<b>Seleccionados: ${seleccionados} de ${total}</b>`;
+        }
+        const seleccionarTodo = document.getElementById('seleccionar-todo');
+        if (seleccionarTodo) {
+            seleccionarTodo.checked = (total > 0 && seleccionados === total);
+        }
+      }
+
+      function toggleAllCheckboxes(source) {
+          document.querySelectorAll('.propiedad-checkbox').forEach(checkbox => checkbox.checked = source.checked);
+          actualizarDatosAutocompletados();
+      }
+      
+      function cargarAsesores(data) {
+        const asesorSelect = document.getElementById('gestor');
+        asesorSelect.innerHTML = '<option selected disabled value="">Seleccione un Asesor</option>';
+        if (data && data.asesores) {
+            data.asesores.forEach(a => { asesorSelect.innerHTML += `<option value="${a}">${a}</option>`; });
+        }
+      }
+
+      function buscarCorreos(asesorSeleccionado) {
+        const asesor = asesorSeleccionado || document.getElementById('gestor').value;
+        if (!asesor) return;
+        google.script.run.withSuccessHandler(llenarCorreos).obtenerCorreosPorAsesor(asesor);
+      }
+
+      function llenarCorreos(correos) {
+        document.getElementById('correo-ejecutivo').value = correos.correoEjecutivo;
+        document.getElementById('correo-supervisor').value = correos.correoSupervisor;
+        document.getElementById('correo-coordinador').value = correos.correoCoordinador;
+      }
+
+      function calcularAdeudo() {
+        const parciales = parseFloat(document.getElementById('parciales').value) || 0;
+        const adeudoTotal = parseFloat(document.getElementById('monto').value) || 0;
+        document.getElementById('adeudo').value = ((parciales > 0 && adeudoTotal > 0) ? (adeudoTotal / parciales) : 0).toFixed();
+      }
+
+      function actualizarEstadoBotonSubmit() {
+        submitButton.disabled = document.querySelectorAll('.propiedad-checkbox:checked').length === 0;
+      }
+
+      function actualizarDatosAutocompletados() {
+          const primerCheckboxSeleccionado = document.querySelector('#propiedades-list input.propiedad-checkbox:checked');
+          if (primerCheckboxSeleccionado) {
+              llenarDetallesDePropiedad(primerCheckboxSeleccionado.value);
+          } else {
+              ['morosidad', 'ultimoPago', 'ultimaGestion'].forEach(id => document.getElementById(id).value = '');
+              document.getElementById('gestor').value = '';
+          }
+          actualizarContadorSeleccion();
+          actualizarEstadoBotonSubmit();
+      }
+
+      function llenarDetallesDePropiedad(index) {
+          const prop = allClientProperties[index];
+          if (prop) {
+              document.getElementById('morosidad').value = prop.morosidad || 'N/A';
+              document.getElementById('ultimoPago').value = prop.ultimoPago || 'N/A';
+              document.getElementById('ultimaGestion').value = prop.ultimaGestion || 'N/A';
+              const asesor = prop.asesor || '';
+              document.getElementById('gestor').value = asesor;
+              if (asesor) {
+                buscarCorreos(asesor);
+              }
+          }
+      }
+
+      function handleFormSubmit(e) {
+        e.preventDefault();
+        try {
+          const selectedPropertiesData = [];
+          document.querySelectorAll('#propiedades-list input.propiedad-checkbox:checked').forEach(cb => {
+            selectedPropertiesData.push(allClientProperties[cb.value]);
+          });
+          if (selectedPropertiesData.length === 0) {
+            alert("Por favor, seleccione al menos una propiedad."); return;
+          }
+          submitButton.disabled = true;
+          submitButton.innerText = "Guardando...";
+          const comentarioSelect = document.getElementById('comentario-select');
+          const commonDetails = {
+              tipoRegistro: document.querySelector('input[name="tipoRegistro"]:checked').value,
+              gestor: document.getElementById('gestor').value,
+              entregaConvenio: document.getElementById('entregaConvenio').value,
+               fechaRecibo: document.getElementById('fechaRecibo').value,
+              fechaInicio: document.getElementById('fechaInicio').value,
+              fechaFin: document.getElementById('fechaFin').value,
+              parciales: document.getElementById('parciales').value,
+              monto: document.getElementById('monto').value,
+              adeudo: document.getElementById('adeudo').value,
+              comentario: comentarioSelect.value === 'otro' ? document.getElementById('comentario').value : comentarioSelect.value,
+              correoEjecutivo: document.getElementById('correo-ejecutivo').value,
+              correoSupervisor: document.getElementById('correo-supervisor').value,
+              correoCoordinador: document.getElementById('correo-coordinador').value
+          };
+          const datosFormulario = { commonDetails, selectedProperties: selectedPropertiesData };
+          google.script.run.withSuccessHandler(response => {
+              alert(response); 
+              if (!response.startsWith("Error:")) {
+                google.script.host.close();
+              } else {
+                submitButton.disabled = false;
+                actualizarFormularioDinamico();
+              }
+          }).guardarTramite(datosFormulario);
+        } catch (error) {
+            alert("Ocurrió un error: " + error.message);
+            submitButton.disabled = false;
+            actualizarFormularioDinamico();
+        }
+      }
+    </script>
+  </body>
+</html>
