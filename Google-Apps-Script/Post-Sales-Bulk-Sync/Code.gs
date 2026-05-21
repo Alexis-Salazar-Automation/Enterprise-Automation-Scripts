@@ -82,58 +82,6 @@ function procesarProyectoGAS(token, idProy, isFirst) {
   return todas_viviendas.length;
 }
 
-/*function pegarEnHoja(viviendasArray, isFirst) {
-  var libro = SpreadsheetApp.getActiveSpreadsheet();
-  var sheet = libro.getSheetByName("Cartera_PV");
-  if (!sheet) sheet = libro.insertSheet("Cartera_PV");
-
-  var props = PropertiesService.getScriptProperties();
-  var headers;
-
-  if (isFirst) {
-    // 🔥 Guardamos cuántas filas había AYER antes de borrar todo
-    var filasAntes = sheet.getLastRow() > 1 ? sheet.getLastRow() - 1 : 0;
-    props.setProperty("FILAS_AYER", filasAntes.toString());
-
-    sheet.clear();
-    headers = Object.keys(viviendasArray[0]);
-    props.setProperty("CABECERAS", JSON.stringify(headers));
-    sheet.appendRow(headers); 
-    SpreadsheetApp.flush(); 
-  } else {
-    var storedHeaders = props.getProperty("CABECERAS");
-    headers = storedHeaders ? JSON.parse(storedHeaders) : Object.keys(viviendasArray[0]);
-  }
-
-  var datos2D = viviendasArray.map(function(obj) {
-    return headers.map(function(h) { return (obj[h] !== undefined && obj[h] !== null) ? obj[h] : ""; });
-  });
-
-  var chunkSize = 10000; 
-  var maxIntentos = 3;   
-  var ultimaFila = sheet.getLastRow();
-
-  for (var i = 0; i < datos2D.length; i += chunkSize) {
-    var bloque = datos2D.slice(i, i + chunkSize);
-    var exito = false;
-    var intentos = 0;
-
-    while (!exito && intentos < maxIntentos) {
-      try {
-        sheet.getRange(ultimaFila + 1, 1, bloque.length, headers.length).setValues(bloque);
-        SpreadsheetApp.flush(); 
-        ultimaFila += bloque.length; 
-        exito = true;
-        Utilities.sleep(1500); 
-      } catch(e) {
-        intentos++;
-        Utilities.sleep(6000); 
-        if (intentos >= maxIntentos) throw new Error("Fallo al subir bloque.");
-      }
-    }
-  }
-}*/
-
 function pegarEnHoja(viviendasArray, isFirst) {
   // 1. EL LIBRO MAESTRO (Donde corre el script, privado para ti)
   var libroMaster = SpreadsheetApp.getActiveSpreadsheet();
@@ -277,16 +225,6 @@ function generarRespaldoYEnviarCorreo() {
     </div>
   </div>
   `;
-
-
-  // 4. Enviar el correo final
-  /*MailApp.sendEmail({
-    to: "aux.adm6@gph.mx",
-    subject: "✅ Cartera Post Venta Actualizada Exitosamente",
-    htmlBody: htmlBody,
-    attachments: [blob]
-  });*/
-
 
   // 4. Enviar el correo final con Timestamp
   var timestampAsunto = Utilities.formatDate(new Date(), "GMT-6", "dd/MM/yyyy HH:mm");
