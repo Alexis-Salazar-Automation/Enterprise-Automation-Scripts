@@ -1,9 +1,12 @@
 # Portfolio Sync Engine (Python & GitHub Actions)
 
 ## 🚀 Descripción
-Bot de automatización diseñado para el ciclo de vida de datos financieros. El sistema extrae información de una API privada, procesa los datos con **Pandas**, sincroniza una hoja de cálculo en la nube y genera respaldos históricos automáticos.
+Motor de sincronización y orquestación de datos diseñado para actuar como la **infraestructura base** del área. El sistema automatiza la extracción de la cartera de clientes desde una API privada, centralizando la información en Google Drive y Google Sheets.
 
-**Impacto:** Sustitución de un proceso manual de 5 horas por una ejecución automatizada de 45 segundos.
+**Impacto y Valor de Negocio:**
+- **Eliminación del Error Humano:** Garantiza la disponibilidad de datos al 100%, eliminando la dependencia de ejecuciones manuales propensas a olvidos.
+- **Ecosistema Integrado:** Actúa como el proveedor de datos (Data Provider) para todas las demás automatizaciones del departamento.
+- **Trazabilidad Total:** Implementación de reportes de variaciones diarios que permiten identificar cambios críticos en la cartera de forma inmediata.
 
 ## 🛠️ Stack Tecnológico
 - **Lenguaje:** Python 3.10
