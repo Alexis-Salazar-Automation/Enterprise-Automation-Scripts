@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <style>
+    body { font-family: 'Segoe UI', sans-serif; background-color: #fff8f0; color: #333; padding: 20px; margin: 0; box-sizing: border-box; }
+    .card { background: #fff; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); border: 1px solid #ddd; }
+    h2 { margin-top: 0; text-align: center; color: #d97706; font-weight: 500; font-size: 1.4em; border-bottom: 1px solid #eee; padding-bottom: 15px; margin-bottom: 20px; }
+    #statusText { font-size: 1.1em; margin-bottom: 10px; text-align: center; color: #d97706; min-height: 20px; font-weight: bold;}
+    .progress-container { width: 100%; background: #e9ecef; border-radius: 25px; margin-bottom: 10px; }
+    #progressBar { width: 0%; height: 20px; background-color: #f08b03; border-radius: 25px; transition: width 0.4s ease-in-out; text-align: center; color: #fff; font-weight: bold; line-height: 20px; font-size: 12px;}
+    #progressText { text-align: center; font-family: monospace; font-size: 1em; color: #5bc0de; margin-bottom: 20px; }
+    #log-console { background-color: #222; border: 1px solid #444; border-radius: 8px; height: 160px; overflow-y: auto; padding: 10px; font-family: 'Courier New', Courier, monospace; font-size: 12px; color: #f8f8f2; white-space: pre-wrap; }
+    .log-item { padding: 2px 0; border-bottom: 1px solid #383838; }
+    .log-success { color: #5cb85c; }
+    .log-error { color: #d9534f; font-weight: bold;}
+    .log-info { color: #5bc0de; }
+    .log-warning { color: #f0ad4e; }
+    .botones-container { display: flex; gap: 10px; margin-top: 20px; }
+    button { flex: 1; padding: 15px; font-size: 1.1em; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.3s; }
+    button:disabled { background-color: #ccc !important; cursor: not-allowed !important; color: #888 !important; transform: none !important;}
+    #btnStart { background-color: #f08b03; color: #fff; }
+    #btnStart:hover:not(:disabled) { background-color: #d97706; transform: translateY(-2px); }
+    #btnStop { background-color: #d9534f; color: #ffffff; display: none; }
+    #btnStop:hover:not(:disabled) { background-color: #c9302c; transform: translateY(-2px); }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>📡 Terminal de Consulta - Lagos de Moreno</h2>
+    <div id="statusText">Listo para procesar.</div>
+    <div class="progress-container"><div id="progressBar"></div></div>
+    <div id="progressText">0 / 0 | 0%</div>
+    <div id="log-console"></div>
+    <div class="botones-container">
+      <button id="btnStart" onclick="iniciarProceso()">▶ Iniciar Consulta</button>
+      <button id="btnStop" onclick="detenerProceso()">⏹ Detener Seguro</button>
+    </div>
+  </div>
+
+  <script>
+    let detenerSolicitado = false;
+
+    function runGoogle(fnName, ...args) {
+      return new Promise((resolve, reject) => {
+        google.script.run.withSuccessHandler(resolve).withFailureHandler(reject)[fnName](...args);
+      });
+    }
+
+    function logToConsole(message, type = 'info') {
+        const consoleDiv = document.getElementById('log-console');
+        const newItem = document.createElement('div');
+        newItem.className = 'log-item log-' + type;
+        newItem.textContent = `> ${message}`;
+        consoleDiv.appendChild(newItem);
+        consoleDiv.scrollTop = consoleDiv.scrollHeight; 
+    }
+
+    function detenerProceso() {
+      detenerSolicitado = true;
+      document.getElementById('btnStop').disabled = true;
+      document.getElementById('btnStop').innerText = "⏳ Deteniendo...";
+      logToConsole('Se solicitó detener. Finalizando registro actual...', 'warning');
+    }
+
+    async function iniciarProceso() {
+      const btnStart = document.getElementById('btnStart');
+      const btnStop = document.getElementById('btnStop');
+      const statusText = document.getElementById('statusText');
+      
+      if (btnStart.disabled) return;
+      
+      detenerSolicitado = false;
+      btnStart.disabled = true;
+      btnStart.style.display = "none";
+      btnStop.disabled = false;
+      btnStop.innerText = "⏹ Detener Seguro";
+      btnStop.style.display = "block";
+      
+      try {
+        const cuotaInicial = await runGoogle('obtenerCuotaRestante'); // <--- NUEVO
+        logToConsole(`CUOTA INICIAL: ${cuotaInicial.toLocaleString()} peticiones disponibles.`, 'info'); // <--- NUEVO
+        logToConsole('Configurando hoja de cálculo...', 'info');
+        await runGoogle('configurarHojaLagos');
+
+        logToConsole('Detectando registros pendientes...', 'info');
+        const pendientes = await runGoogle('obtenerClavesParaProcesarLagos');
+        
+        if (pendientes.length === 0) {
+          logToConsole('No hay claves nuevas para procesar.', 'success');
+          statusText.innerText = "¡Todo está al día!";
+          restaurarBotones("✔️ Finalizado");
+          return;
+        }
+        
+        const totalClaves = pendientes.length;
+        logToConsole(`Se detectaron ${totalClaves} claves por procesar.`, 'warning');
+        
+        let chunk = []; 
+        let procesoCompletado = true;
+        
+        for (let i = 0; i < totalClaves; i++) {
+          if (detenerSolicitado) {
+             logToConsole('🛑 Proceso interrumpido por el usuario.', 'error');
+             if (chunk.length > 0) {
+               statusText.innerText = `💾 Guardando respaldo final...`;
+               await runGoogle('guardarChunkDiscontinuo', chunk);
+               logToConsole(`💾 RESPALDO FINAL: Se salvaron los últimos ${chunk.length} datos.`, 'warning');
+             }
+             statusText.innerText = "Proceso Pausado.";
+             procesoCompletado = false;
+             break;
+          }
+
+          const item = pendientes[i];
+          statusText.innerText = `Consultando: ${item.clave}`;
+          
+          const resultado = await runGoogle('procesarClaveLagos', item.clave);
+          
+          const percent = Math.round(((i + 1) / totalClaves) * 100);
+          document.getElementById('progressBar').style.width = percent + '%';
+          document.getElementById('progressText').innerText = `${i + 1} / ${totalClaves} | ${percent}%`;
+          
+          if (resultado.status === 'OK') {
+            logToConsole(`OK: ${item.clave} -> $${parseFloat(resultado.datos.encabezado.importeTotal).toFixed(2)}`, 'success');
+          } else {
+            logToConsole(`ERROR: ${item.clave} -> ${resultado.mensaje}`, 'error');
+          }
+          
+          const encabezado = (resultado.datos && resultado.datos.encabezado) ? resultado.datos.encabezado : {};
+          const conceptos = resultado.conceptosDesglosados || {};
+          const direccion = `${encabezado.calle || ''} ${encabezado.exterior || ''} ${encabezado.interior || ''}, ${encabezado.colonia || ''}`.trim();
+
+          const valoresFila = [
+            resultado.status,
+            resultado.mensaje,
+            parseFloat(encabezado.importeTotal) || 0,
+            resultado.periodo || "N/A", // <--- AQUÍ INSERTAMOS EL PERIODO CALCULADO
+            encabezado.contribuyente || "",
+            direccion,
+            encabezado.observaciones || "",
+            parseFloat(encabezado.descuento) || 0,
+            conceptos.IMPUESTO || 0,
+            conceptos.REZAGO || 0,
+            conceptos.ACTUALIZACION || 0,
+            conceptos.RECARGOS || 0,
+            conceptos.GASTOS || 0,
+            conceptos.OTROS || 0
+          ];
+          
+          chunk.push({ fila: item.fila, valores: valoresFila });
+
+          if (chunk.length >= 30 || i === totalClaves - 1) {
+            statusText.innerText = `💾 Guardando paquete de ${chunk.length} registros...`;
+            await runGoogle('guardarChunkDiscontinuo', chunk);
+
+            // OBTENER CUOTA DESPUÉS DE GUARDAR
+            const cuotaActual = await runGoogle('obtenerCuotaRestante'); // <--- NUEVO
+            logToConsole(`💾 Registros guardados. Cuota restante: ${cuotaActual.toLocaleString()}`, 'info'); // <--- NUEVO
+            logToConsole(`💾 Se insertaron ${chunk.length} registros en la hoja.`, 'info');
+            chunk = []; 
+          }
+        }
+        
+        if (procesoCompletado) {
+          statusText.innerText = "¡Proceso terminado con éxito!";
+          logToConsole("Todas las claves fueron procesadas.", "success");
+        }
+        restaurarBotones(procesoCompletado ? "✔️ Finalizado" : "▶ Reanudar Consulta");
+
+      } catch (error) {
+        statusText.innerText = "Ocurrió un error general.";
+        logToConsole(`ERROR FATAL: ${error.message}`, "error");
+        restaurarBotones("▶ Reanudar Consulta");
+      }
+    }
+
+    function restaurarBotones(textoStart) {
+      const btnStart = document.getElementById('btnStart');
+      const btnStop = document.getElementById('btnStop');
+      btnStop.style.display = "none";
+      btnStart.style.display = "block";
+      btnStart.disabled = false;
+      btnStart.innerText = textoStart;
+    }
+  </script>
+</body>
+</html>

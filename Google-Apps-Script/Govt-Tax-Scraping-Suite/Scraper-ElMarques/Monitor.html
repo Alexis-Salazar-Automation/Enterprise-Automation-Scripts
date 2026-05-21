@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <style>
+    body { font-family: 'Segoe UI', sans-serif; background-color: #1e1e2f; color: #e0e0e0; padding: 20px; margin: 0; box-sizing: border-box; }
+    .card { background: #2a2a40; padding: 25px; border-radius: 12px; box-shadow: 0 8px 15px rgba(0,0,0,0.5); }
+    h2 { margin-top: 0; text-align: center; color: #8be9fd; font-weight: normal; font-size: 1.4em; border-bottom: 1px solid #44475a; padding-bottom: 15px; margin-bottom: 20px; }
+    
+    #statusText { font-size: 1.1em; margin-bottom: 10px; text-align: center; color: #ffb86c; min-height: 20px; font-weight: bold;}
+    
+    .progress-container { width: 100%; background: #383854; border-radius: 25px; margin-bottom: 10px; }
+    #progressBar { width: 0%; height: 20px; background-color: #50fa7b; border-radius: 25px; transition: width 0.4s ease-in-out; text-align: center; color: #1e1e2f; font-weight: bold; line-height: 20px; font-size: 12px;}
+    #progressText { text-align: center; font-family: monospace; font-size: 1em; color: #bd93f9; margin-bottom: 20px; }
+
+    #log-console { background-color: #111; border: 1px solid #44475a; border-radius: 8px; height: 160px; overflow-y: auto; padding: 10px; font-family: 'Courier New', Courier, monospace; font-size: 12px; color: #f8f8f2; white-space: pre-wrap; }
+    .log-item { padding: 2px 0; border-bottom: 1px solid #282a36; }
+    .log-success { color: #50fa7b; }
+    .log-error { color: #ff5555; font-weight: bold;}
+    .log-info { color: #8be9fd; }
+    .log-warning { color: #f1fa8c; }
+    
+    .botones-container { display: flex; gap: 10px; margin-top: 20px; }
+    button { flex: 1; padding: 15px; font-size: 1.1em; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.3s; }
+    button:disabled { background-color: #6272a4 !important; cursor: not-allowed !important; color: #a8a8b2 !important; transform: none !important;}
+    
+    #btnStart { background-color: #ff79c6; color: #1e1e2f; }
+    #btnStart:hover:not(:disabled) { background-color: #ff92d0; transform: translateY(-2px); }
+    
+    #btnStop { background-color: #ff5555; color: #ffffff; display: none; }
+    #btnStop:hover:not(:disabled) { background-color: #ff8080; transform: translateY(-2px); }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>📡 Terminal de Consulta</h2>
+    <div id="statusText">Listo para procesar.</div>
+    
+    <div class="progress-container">
+      <div id="progressBar"></div>
+    </div>
+    <div id="progressText">0 / 0 | 0%</div>
+    
+    <div id="log-console"></div>
+
+    <div class="botones-container">
+      <button id="btnStart" onclick="iniciarProceso()">▶ Iniciar Consulta</button>
+      <button id="btnStop" onclick="detenerProceso()">⏹ Detener Seguro</button>
+    </div>
+  </div>
+
+  <script>
+    // Variable global para controlar la detención
+    let detenerSolicitado = false;
+
+    function runGoogle(fnName, ...args) {
+      return new Promise((resolve, reject) => {
+        google.script.run.withSuccessHandler(resolve).withFailureHandler(reject)[fnName](...args);
+      });
+    }
+
+    function logToConsole(message, type = 'info') {
+        const consoleDiv = document.getElementById('log-console');
+        const newItem = document.createElement('div');
+        newItem.className = 'log-item log-' + type;
+        newItem.textContent = `> ${message}`;
+        consoleDiv.appendChild(newItem);
+        consoleDiv.scrollTop = consoleDiv.scrollHeight; 
+    }
+
+    // Función para activar la bandera de detención
+    function detenerProceso() {
+      detenerSolicitado = true;
+      const btnStop = document.getElementById('btnStop');
+      btnStop.disabled = true;
+      btnStop.innerText = "⏳ Deteniendo...";
+      logToConsole('Se solicitó detener. Esperando a que termine el registro actual...', 'warning');
+    }
+
+    async function iniciarProceso() {
+      const btnStart = document.getElementById('btnStart');
+      const btnStop = document.getElementById('btnStop');
+      const statusText = document.getElementById('statusText');
+      
+      if (btnStart.disabled) return;
+      
+      // Reiniciar variables y UI
+      detenerSolicitado = false;
+      btnStart.disabled = true;
+      btnStart.style.display = "none"; // Ocultar botón de inicio
+      
+      btnStop.disabled = false;
+      btnStop.innerText = "⏹ Detener Seguro";
+      btnStop.style.display = "block"; // Mostrar botón de detener
+      
+      try {
+        logToConsole('Configurando hoja de cálculo...', 'info');
+        await runGoogle('configurarHoja');
+
+        logToConsole('Detectando registros pendientes...', 'info');
+        const pendientes = await runGoogle('obtenerClavesParaProcesar');
+        
+        if (pendientes.length === 0) {
+          logToConsole('No hay claves nuevas para procesar o todas ya están listas.', 'success');
+          statusText.innerText = "¡Todo está al día!";
+          restaurarBotones("✔️ Finalizado");
+          return;
+        }
+        
+        const totalClaves = pendientes.length;
+        logToConsole(`Se detectaron ${totalClaves} claves por procesar.`, 'warning');
+        
+        let chunk = []; 
+        let procesoCompletado = true;
+        
+        for (let i = 0; i < totalClaves; i++) {
+          
+          // VERIFICACIÓN DE PARADA SEGURA ANTES DE CADA CICLO
+          if (detenerSolicitado) {
+             logToConsole('🛑 Proceso interrumpido por el usuario.', 'error');
+             if (chunk.length > 0) {
+               statusText.innerText = `💾 Guardando respaldo final de ${chunk.length} registros...`;
+               await runGoogle('guardarChunkDiscontinuo', chunk);
+               logToConsole(`💾 RESPALDO FINAL: Se salvaron los últimos ${chunk.length} datos antes de detener.`, 'warning');
+             }
+             statusText.innerText = "Proceso Pausado.";
+             procesoCompletado = false;
+             break; // Salir del ciclo For inmediatamente
+          }
+
+          const item = pendientes[i];
+          statusText.innerText = `Consultando: ${item.clave}`;
+          
+          const resultado = await runGoogle('procesarUnaClave', item.clave);
+          
+          const percent = Math.round(((i + 1) / totalClaves) * 100);
+          document.getElementById('progressBar').style.width = percent + '%';
+          document.getElementById('progressText').innerText = `${i + 1} / ${totalClaves} | ${percent}%`;
+          
+          if (resultado.status == "201" || resultado.status == 200) {
+            logToConsole(`OK: ${item.clave} -> $${resultado.datos.total_a_pagar.toFixed(2)}`, 'success');
+          } else {
+            logToConsole(`ERROR: ${item.clave} -> ${resultado.mensaje}`, 'error');
+          }
+          
+          const valoresFila = [
+            resultado.status, resultado.mensaje, resultado.datos ? resultado.datos.total_a_pagar : 0,
+            resultado.datos ? resultado.datos.periodo : "", resultado.conceptosDesglosados["IMPUESTO"] || 0,
+            resultado.conceptosDesglosados["REZAGO_ACTUAL"] || 0, resultado.conceptosDesglosados["REZAGO_ANTERIOR"] || 0,
+            resultado.conceptosDesglosados["RECARGOS"] || 0, resultado.conceptosDesglosados["ACTUALIZACION"] || 0,
+            resultado.conceptosDesglosados["MULTAS"] || 0, resultado.conceptosDesglosados["REDONDEO"] || 0,
+            resultado.datos ? resultado.datos.rfc : "", resultado.datos ? resultado.datos.direccion : ""
+          ];
+          
+          chunk.push({ fila: item.fila, valores: valoresFila });
+
+          if (chunk.length >= 30 || i === totalClaves - 1) {
+            statusText.innerText = `💾 Guardando paquete de ${chunk.length} registros...`;
+            await runGoogle('guardarChunkDiscontinuo', chunk);
+            logToConsole(`💾 Se insertaron ${chunk.length} registros en la hoja.`, 'info');
+            chunk = []; 
+          }
+        }
+        
+        // Finalización
+        if (procesoCompletado) {
+          statusText.innerText = "¡Proceso terminado con éxito!";
+          logToConsole("Todas las claves fueron procesadas.", "success");
+        }
+        restaurarBotones(procesoCompletado ? "✔️ Finalizado" : "▶ Reanudar Consulta");
+
+      } catch (error) {
+        statusText.innerText = "Ocurrió un error general.";
+        logToConsole(`ERROR FATAL: ${error.message}`, "error");
+        restaurarBotones("▶ Reanudar Consulta");
+      }
+    }
+
+    // Función auxiliar para regresar los botones a la normalidad
+    function restaurarBotones(textoStart) {
+      const btnStart = document.getElementById('btnStart');
+      const btnStop = document.getElementById('btnStop');
+      
+      btnStop.style.display = "none"; // Ocultar el de detener
+      btnStart.style.display = "block"; // Mostrar el de iniciar/reanudar
+      btnStart.disabled = false;
+      btnStart.innerText = textoStart;
+    }
+  </script>
+</body>
+</html>
