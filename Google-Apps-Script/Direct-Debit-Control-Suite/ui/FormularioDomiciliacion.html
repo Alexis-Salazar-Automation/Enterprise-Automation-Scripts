@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <base target="_top">
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { padding: 20px; font-family: Arial, sans-serif; }
+        .paso-container { display: none; }
+        .section-header { margin-top: 20px; color: #007bff; border-bottom: 2px solid #eee; padding-bottom: 5px; }
+        #suggestions-box { border: 1px solid #ccc; border-top: none; max-height: 150px; overflow-y: auto; background-color: white; position: absolute; z-index: 1000; width: calc(100% - 30px); }
+        .suggestion-item { padding: 8px 12px; cursor: pointer; }
+        .suggestion-item:hover { background-color: #f0f0f0; }
+        .client-pill { display: inline-flex; align-items: center; background-color: #e0e0e0; border-radius: 16px; padding: 5px 10px; margin: 2px; }
+        .client-pill .remove-client { margin-left: 8px; cursor: pointer; font-weight: bold; }
+        .loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.8); z-index: 9999; display: flex; justify-content: center; align-items: center; }
+        
+        .propiedades-scroll-container {
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 10px;
+            background-color: #fcfcfc;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- PASO 1: BÚSQUEDA -->
+        <div id="paso1-container" class="paso-container" style="display: block;">
+            <h4 class="section-header">Paso 1: Buscar Propietario(s)</h4>
+            <div class="form-group position-relative">
+                <input type="text" id="propietario-search" class="form-control" placeholder="Escribe un nombre para buscar y agregar..." autocomplete="off">
+                <div id="suggestions-box"></div>
+            </div>
+            <div id="selected-clients-container"></div>
+            <button type="button" id="buscar-propiedades-btn" class="btn btn-primary mt-2" disabled>Siguiente: Seleccionar Propiedades &rarr;</button>
+        </div>
+
+        <!-- PASO 2: SELECCIÓN DE PROPIEDADES -->
+        <div id="paso2-container" class="paso-container">
+            <h4 class="section-header">Paso 2: Seleccionar Propiedades</h4>
+            
+            <div class="input-group mb-2">
+                <div class="input-group-prepend">
+                    <span class="input-group-text">🔍</span>
+                </div>
+                <input type="text" id="prop-filter" class="form-control" placeholder="Filtrar lotes por nombre o número..." onkeyup="filterProperties()">
+            </div>
+
+            <div class="form-check border-bottom pb-2 mb-2">
+                <input class="form-check-input" type="checkbox" id="select-all-props" checked onchange="toggleAllProps(this)">
+                <label class="form-check-label font-weight-bold text-primary" for="select-all-props" style="cursor:pointer">
+                    Seleccionar / Deseleccionar (Visibles)
+                </label>
+            </div>
+
+            <div id="propiedades-list" class="propiedades-scroll-container mb-3"></div>
+            
+            <button type="button" class="btn btn-secondary" onclick="mostrarPaso(1)">&larr; Regresar</button>
+            <button type="button" class="btn btn-primary" onclick="mostrarPaso(3)">Siguiente: Llenar Detalles &rarr;</button>
+        </div>
+        
+        <!-- PASO 3 y 4: DETALLES -->
+        <div id="paso3-container" class="paso-container">
+            <form id="domiciliacion-form">
+                <h4 class="section-header">Paso 3: Detalles de la Domiciliación</h4>
+                <div class="form-row">
+                    <div class="form-group col-md-6"><label for="fechaRecepcion">Fecha de Recepción</label><input type="date" class="form-control" id="fechaRecepcion" required></div>
+                    <div class="form-group col-md-6"><label for="fechaEnvioAdmin">Fecha de Envío a Admin</label><input type="date" class="form-control" id="fechaEnvioAdmin" required></div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group col-md-6"><label for="monto">Monto a Domiciliar</label><input type="number" step="0.01" class="form-control" id="monto" required></div>
+                    <div class="form-group col-md-6"><label for="tarjeta">Número de Tarjeta</label><input type="text" class="form-control" id="tarjeta" required autocomplete="off" maxlength="16" placeholder="16 dígitos (sin espacios)"></div>
+                </div>
+                <div class="form-group">
+                    <label>Día, Mes y Año de Cargo</label>
+                    <div class="input-group">
+                        <select id="dia" class="form-control"></select>
+                        <select id="mes" class="form-control"></select>
+                        <select id="anio" class="form-control"></select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group col-md-6">
+                        <label>Tipo de Documento Entregado</label>
+                        <div class="border p-2 rounded">
+                            <div class="form-check form-check-inline"><input class="form-check-input" type="checkbox" id="doc-original" value="Original"><label class="form-check-label" for="doc-original">Original</label></div>
+                            <div class="form-check form-check-inline"><input class="form-check-input" type="checkbox" id="doc-escaner" value="Escaner"><label class="form-check-label" for="doc-escaner">Escaner</label></div>
+                            <div class="form-check form-check-inline"><input class="form-check-input" type="checkbox" id="doc-foto" value="Foto"><label class="form-check-label" for="doc-foto">Foto</label></div>
+                        </div>
+                    </div>
+                    <div class="form-group col-md-6">
+                        <label for="comentarios-gph">Comentarios GPH</label>
+                        <select id="comentarios-gph" class="form-control">
+                            <option>Domiciliación</option>
+                            <option>Cancelación</option>
+                            <option value="otro">Otro (Escribir manualmente)</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group" id="comentario-personalizado-container" style="display: none;">
+                    <label for="comentario-personalizado">Comentario Manual</label>
+                    <textarea class="form-control" id="comentario-personalizado" rows="2"></textarea>
+                </div>
+
+                <h4 class="section-header">Paso 4: Datos de Cartera (Autocompletado)</h4>
+                <div class="form-row">
+                    <div class="form-group col-md-6"><label for="referencia-cartera">Referencia</label><input type="text" class="form-control" id="referencia-cartera" readonly></div>
+                    <div class="form-group col-md-6"><label for="asesor-cartera">Ejecutivo Asignado (Editable)</label><select id="asesor-cartera" class="form-control"></select></div>
+                </div>
+
+                <hr>
+                <button type="button" class="btn btn-secondary" onclick="mostrarPaso(2)">&larr; Regresar</button>
+                <button type="submit" class="btn btn-success">✓ Registrar Domiciliación</button>
+            </form>
+        </div>
+    </div>
+    
+    <div id="loading" class="loading-overlay" style="display: none;"><div class="spinner-border text-primary"></div></div>
+
+    <script>
+    let selectedClients = [], allClientProperties = [], allAsesores = [], puedeVerTarjeta = false, searchTimeout;
+
+    document.addEventListener("DOMContentLoaded", () => {
+        google.script.run.withSuccessHandler(setupInicial).obtenerDatosParaFormulario();
+    });
+    
+    function setupInicial(data) {
+        allAsesores = data.asesores || [];
+        puedeVerTarjeta = data.puedeVerTarjeta;
+        
+        const asesorSelect = document.getElementById('asesor-cartera');
+        asesorSelect.innerHTML = '<option value="">Seleccione un asesor...</option>' + allAsesores.map(a => `<option value="${a}">${a}</option>`).join('');
+        
+        document.getElementById('fechaRecepcion').valueAsDate = new Date();
+        document.getElementById('fechaEnvioAdmin').valueAsDate = new Date();
+        
+        const diaSelect = document.getElementById('dia');
+        for(let i=1; i<=31; i++) diaSelect.innerHTML += `<option>${i}</option>`;
+        
+        const mesSelect = document.getElementById('mes');
+        const meses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+        meses.forEach(mes => mesSelect.innerHTML += `<option>${mes}</option>`);
+        
+        const anioSelect = document.getElementById('anio');
+        const anioActual = new Date().getFullYear();
+        for(let i=anioActual - 2; i<=anioActual + 5; i++) {
+            anioSelect.innerHTML += `<option ${i === anioActual ? 'selected' : ''}>${i}</option>`;
+        }
+
+        document.getElementById('propietario-search').addEventListener('keyup', handleClientSearch);
+        document.getElementById('buscar-propiedades-btn').addEventListener('click', buscarPropiedades);
+        document.getElementById('domiciliacion-form').addEventListener('submit', handleFormSubmit);
+        
+        document.getElementById('comentarios-gph').addEventListener('change', function(e) {
+            document.getElementById('comentario-personalizado-container').style.display = e.target.value === 'otro' ? 'block' : 'none';
+            gestionarEstadoCancelacion(e.target.value === 'Cancelación');
+        });
+        
+        document.getElementById('tarjeta').addEventListener('input', e => {
+            e.target.value = e.target.value.replace(/\D/g, '');
+            if (!puedeVerTarjeta) e.target.value = truncarTarjeta(e.target.value);
+        });
+    }
+
+    function gestionarEstadoCancelacion(esCancelacion) {
+        const montoInput = document.getElementById('monto');
+        const diaSelect = document.getElementById('dia');
+        const mesSelect = document.getElementById('mes');
+        const anioSelect = document.getElementById('anio');
+        const tarjetaInput = document.getElementById('tarjeta');
+
+        montoInput.disabled = esCancelacion;
+        diaSelect.disabled = esCancelacion;
+        mesSelect.disabled = esCancelacion;
+        anioSelect.disabled = esCancelacion;
+        montoInput.required = !esCancelacion;
+
+        if (esCancelacion) {
+            montoInput.value = ''; 
+            tarjetaInput.placeholder = 'Últimos 4 dígitos para cancelación';
+            tarjetaInput.maxLength = 16; 
+        } else {
+            tarjetaInput.placeholder = '16 dígitos (sin espacios)';
+            tarjetaInput.maxLength = 16;
+        }
+    }
+
+    function buscarPropiedades() {
+        mostrarLoading(true);
+        google.script.run.withSuccessHandler(cargarPropiedades).obtenerPropiedadesPorVariosClientes(selectedClients);
+    }
+
+    function cargarPropiedades(propiedades) {
+        allClientProperties = propiedades;
+        const list = document.getElementById('propiedades-list');
+        document.getElementById('prop-filter').value = '';
+        document.getElementById('select-all-props').checked = true;
+
+        if (propiedades.length === 0) {
+            list.innerHTML = '<p class="text-danger">No se encontraron propiedades para los clientes seleccionados.</p>';
+        } else {
+            html = propiedades.map((prop, index) =>
+                `<div class="form-check prop-item-container" data-search="${prop.proyecto} ${prop.condominio} ${prop.loteCartera}">
+                    <input class="form-check-input prop-checkbox" type="checkbox" value="${index}" id="prop-${index}" onchange="checkMasterCheckboxState(); actualizarDatosCartera();" checked>
+                    <label class="form-check-label" for="prop-${index}">
+                        <b>${prop.propietario}</b>: ${prop.proyecto} - ${prop.condominio} - Lote ${prop.loteCartera}
+                    </label>
+                </div>`
+            ).join('');
+            
+            list.innerHTML = html;
+            actualizarDatosCartera();
+        }
+        mostrarPaso(2);
+        mostrarLoading(false);
+    }
+
+    function filterProperties() {
+        const term = document.getElementById('prop-filter').value.toLowerCase();
+        const items = document.querySelectorAll('.prop-item-container');
+        
+        items.forEach(item => {
+            const text = item.getAttribute('data-search').toLowerCase();
+            item.style.display = text.includes(term) ? 'block' : 'none';
+        });
+        checkMasterCheckboxState(); // Re-validar master check al filtrar
+    }
+
+    // --- NUEVO: Sincronización Padre <-> Hijos ---
+    function toggleAllProps(source) {
+        const checkboxes = document.querySelectorAll('.prop-checkbox');
+        checkboxes.forEach(cb => {
+            if (cb.closest('.prop-item-container').style.display !== 'none') {
+                cb.checked = source.checked;
+            }
+        });
+        actualizarDatosCartera();
+    }
+
+    // Función que revisa si todos los visibles están marcados
+    function checkMasterCheckboxState() {
+        const visibleCheckboxes = Array.from(document.querySelectorAll('.prop-checkbox')).filter(cb => cb.closest('.prop-item-container').style.display !== 'none');
+        
+        if (visibleCheckboxes.length === 0) {
+            document.getElementById('select-all-props').checked = false;
+            return;
+        }
+
+        const allChecked = visibleCheckboxes.every(cb => cb.checked);
+        document.getElementById('select-all-props').checked = allChecked;
+    }
+
+    function actualizarDatosCartera() {
+        const primerSeleccionado = document.querySelector('.prop-checkbox:checked');
+        const refInput = document.getElementById('referencia-cartera');
+        const asesorSelect = document.getElementById('asesor-cartera');
+
+        if (primerSeleccionado) {
+            const prop = allClientProperties[primerSeleccionado.value];
+            refInput.value = prop.referencia;
+
+            const asesorDeCartera = (prop.asesor || "").toUpperCase().trim().replace(/\s+/g, ' ');
+            const asesorExisteEnLista = allAsesores.some(a => a.toUpperCase().trim().replace(/\s+/g, ' ') === asesorDeCartera);
+            
+            if (asesorExisteEnLista) {
+                const valorCorrectoAsesor = allAsesores.find(a => a.toUpperCase().trim().replace(/\s+/g, ' ') === asesorDeCartera);
+                asesorSelect.value = valorCorrectoAsesor;
+            } else {
+                asesorSelect.value = "";
+            }
+        } else {
+            refInput.value = '';
+            asesorSelect.value = '';
+        }
+    }
+    
+    function handleFormSubmit(e) {
+        e.preventDefault();
+        mostrarLoading(true);
+        
+        const propertiesData = [];
+        document.querySelectorAll('.prop-checkbox:checked').forEach((cb, i) => {
+            const index = cb.value;
+            const prop = { ...allClientProperties[index] };
+            prop.asesor = (i === 0) ? document.getElementById('asesor-cartera').value : prop.asesor;
+            propertiesData.push(prop);
+        });
+        
+        if (propertiesData.length === 0) {
+            alert("Seleccione al menos una propiedad.");
+            mostrarLoading(false);
+            return;
+        }
+        const tiposDocumento = Array.from(document.querySelectorAll('input[id^=doc-]:checked')).map(cb => cb.value);
+        if (tiposDocumento.length === 0) {
+             alert("Seleccione al menos un tipo de documento.");
+             mostrarLoading(false);
+             return;
+        }
+
+        let numeroTarjeta = document.getElementById('tarjeta').value;
+        const esCancelacion = document.getElementById('comentarios-gph').value === 'Cancelación';
+        
+        if (esCancelacion && numeroTarjeta.length > 0 && numeroTarjeta.length < 16) {
+            const ultimosCuatro = numeroTarjeta.slice(-4);
+            numeroTarjeta = '************' + ultimosCuatro;
+        }
+
+        const datosFormulario = {
+            commonDetails: {
+                fechaRecepcion: document.getElementById('fechaRecepcion').value,
+                fechaEnvioAdmin: document.getElementById('fechaEnvioAdmin').value,
+                monto: document.getElementById('monto').value,
+                tarjeta: numeroTarjeta,
+                dia: document.getElementById('dia').value,
+                mes: document.getElementById('mes').value,
+                anio: document.getElementById('anio').value,
+                tipoDocumento: tiposDocumento,
+                comentariosGPH: document.getElementById('comentarios-gph').value,
+                comentarioPersonalizado: document.getElementById('comentario-personalizado').value,
+            },
+            propertiesData: propertiesData
+        };
+        google.script.run
+            .withSuccessHandler(response => {
+                alert(response);
+                if (!response.startsWith("Error:")) {
+                    google.script.host.close();
+                } else {
+                    mostrarLoading(false);
+                }
+            })
+            .guardarDomiciliacion(datosFormulario);
+    }
+    
+    function truncarTarjeta(numero) {
+        if (numero.length > 16) numero = numero.substring(0, 16);
+        if (numero.length <= 8) return numero;
+        const primeros = numero.substring(0, 4);
+        const ultimos = numero.substring(numero.length - 4);
+        const medio = 'X'.repeat(numero.length - 8);
+        return `${primeros}${medio}${ultimos}`;
+    }
+
+    function mostrarPaso(num) {
+        document.querySelectorAll('.paso-container').forEach(el => el.style.display = 'none');
+        document.getElementById(`paso${num}-container`).style.display = 'block';
+    }
+
+    function mostrarLoading(mostrar) {
+        document.getElementById('loading').style.display = mostrar ? 'flex' : 'none';
+    }
+
+    function handleClientSearch() {
+        clearTimeout(searchTimeout);
+        const query = document.getElementById('propietario-search').value;
+        if (query.length < 3) {
+            document.getElementById('suggestions-box').style.display = 'none';
+            return;
+        }
+        searchTimeout = setTimeout(() => {
+            google.script.run.withSuccessHandler(mostrarSugerencias).buscarClientes(query);
+        }, 300);
+    }
+
+    function mostrarSugerencias(clientes) {
+        const suggestionsBox = document.getElementById('suggestions-box');
+        suggestionsBox.innerHTML = '';
+        if (!clientes || clientes.length === 0) {
+            suggestionsBox.style.display = 'none';
+            return;
+        }
+        clientes.forEach(cliente => {
+            const div = document.createElement('div');
+            div.className = 'suggestion-item';
+            div.textContent = cliente;
+            div.onmousedown = () => agregarCliente(cliente);
+            suggestionsBox.appendChild(div);
+        });
+        suggestionsBox.style.display = 'block';
+    }
+
+    function agregarCliente(nombre) {
+        if (!selectedClients.includes(nombre)) {
+            selectedClients.push(nombre);
+            renderSelectedClients();
+        }
+        document.getElementById('propietario-search').value = '';
+        document.getElementById('suggestions-box').style.display = 'none';
+    }
+
+    function removerCliente(index) {
+        selectedClients.splice(index, 1);
+        renderSelectedClients();
+    }
+
+    function renderSelectedClients() {
+        document.getElementById('selected-clients-container').innerHTML = selectedClients.map((nombre, index) => 
+            `<div class="client-pill"><span>${nombre}</span><span class="remove-client" onclick="removerCliente(${index})"> &times;</span></div>`
+        ).join('');
+        document.getElementById('buscar-propiedades-btn').disabled = selectedClients.length === 0;
+    }
+</script>
+</body>
+</html>
