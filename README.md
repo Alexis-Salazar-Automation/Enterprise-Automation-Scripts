@@ -34,7 +34,7 @@
 
 # 
 
-# > \*Nota: Se irán añadiendo más scripts de la suite de automatización conforme se complete su documentación y sanitización.\*
+### 3. [Direct Debit Control Suite (Google Apps Script)](./Google-Apps-Script/Direct-Debit-Control-Suite/)
 
 # 
 
