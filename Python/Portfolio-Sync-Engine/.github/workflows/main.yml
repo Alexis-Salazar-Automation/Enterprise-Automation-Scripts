@@ -1,0 +1,31 @@
+name: Cartera Sync Engine
+
+on:
+  schedule:
+    - cron: '0 12 * * *' # Ejecución diaria 6:00 AM CDMX
+  workflow_dispatch: # Permite ejecutarlo manualmente desde GitHub
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@v3
+
+      - name: Configurar Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      - name: Ejecutar Engine
+        env:
+          EMAIL_USER: ${{ secrets.EMAIL_USER }}
+          EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
+          GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+          DRIVE_BACKUP_FOLDER_ID: ${{ secrets.DRIVE_BACKUP_FOLDER_ID }}
+          API_LOGIN_PAYLOAD: ${{ secrets.API_LOGIN_PAYLOAD }}
+          CREDENCIALES_GOOGLE: ${{ secrets.CREDENCIALES_GOOGLE }}
+        run: python cartera_engine.py
