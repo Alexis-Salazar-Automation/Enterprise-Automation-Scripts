@@ -22,7 +22,7 @@
 
 # 
 
-# \### 2. \[Automation Cartera Engine (Python) - \*Próximamente\*](#)
+### 2. [Automation Cartera Engine (Python)](./Python/Portfolio-Sync-Engine/)
 
 # \*\*Impacto:\*\* Ahorro de 5 horas diarias de trabajo manual.
 
