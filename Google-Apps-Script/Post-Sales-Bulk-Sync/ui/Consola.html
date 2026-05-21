@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body { background-color: #121212; color: #00ff00; font-family: "Courier New", Courier, monospace; padding: 15px; margin:0;}
+    #terminal { height: 380px; overflow-y: auto; border: 1px solid #333; padding: 12px; background: #000; font-size: 13px; line-height: 1.6; margin-bottom: 15px; border-radius: 5px;}
+    button { background-color: #0d6efd; color: white; border: none; padding: 12px 24px; font-size: 15px; cursor: pointer; border-radius: 5px; font-weight: bold; width: 100%; transition: 0.3s;}
+    button:hover { background-color: #0b5ed7; }
+    button:disabled { background-color: #444; color: #888; cursor: not-allowed; }
+    .log-info { color: #aaaaaa; }
+    .log-success { color: #00ff00; }
+    .log-error { color: #ff4444; }
+    .log-highlight { color: #0dcaf0; }
+    .log-warning { color: #ffc107; }
+  </style>
+</head>
+<body>
+
+  <button id="btnStart" onclick="startProcess()">▶ INICIAR EXTRACCIÓN NACIONAL</button>
+  <br><br>
+  <div id="terminal">Iniciando sistema de terminal... Lista para recibir instrucciones.<br></div>
+
+  <script>
+    var tokenGlobal = "";
+    var listaProyectos =[];
+    var totalViviendas = 0;
+
+    function log(msg, type = 'info') {
+      const term = document.getElementById('terminal');
+      term.innerHTML += `<span class="log-${type}">[${new Date().toLocaleTimeString()}] ${msg}</span><br>`;
+      term.scrollTop = term.scrollHeight; 
+    }
+
+    function startProcess() {
+      document.getElementById('btnStart').disabled = true;
+      document.getElementById('btnStart').innerText = "⏳ Extrayendo datos (Por favor no cierres la ventana)...";
+      log("1️⃣ Autenticando con el portal GPH...", "highlight");
+      google.script.run.withSuccessHandler(onLogin).withFailureHandler(onError).loginGAS();
+    }
+
+    function onLogin(token) {
+      log("✅ Login Exitoso. Llave maestra obtenida.", "success");
+      tokenGlobal = token;
+      log("2️⃣ Obteniendo catálogo de 54 proyectos...", "highlight");
+      google.script.run.withSuccessHandler(onProyectos).withFailureHandler(onError).obtenerProyectosGAS(token);
+    }
+
+    function onProyectos(proyectos) {
+      listaProyectos = proyectos;
+      log(`🌍 ¡Catálogo obtenido! Encontrados ${proyectos.length} proyectos.`, "success");
+      log("3️⃣ Iniciando barrido nacional con sistema de Chunking...", "highlight");
+      procesarSiguiente(0);
+    }
+
+    function procesarSiguiente(index) {
+      if (index >= listaProyectos.length) {
+        log(`====================================================`, "highlight");
+        log(`🎉 ¡BARRIDO COMPLETADO! Total absoluto: ${totalViviendas} viviendas.`, "success");
+        
+        // 🔥 AQUÍ DISPARAMOS LA CREACIÓN DEL CORREO Y RESPALDO DESDE LA INTERFAZ
+        log(`⏳ Convirtiendo datos a Excel (.xlsx) y guardando en tu carpeta de Drive...`, "warning");
+        log(`⏳ Generando reporte HTML para aux.adm6@gph.mx...`, "warning");
+        document.getElementById('btnStart').innerText = "⏳ Construyendo Email y Respaldo...";
+
+        google.script.run
+          .withSuccessHandler(function() {
+            log(`✅ ¡MISIÓN CUMPLIDA! El Respaldo en Drive y el Email fueron enviados con éxito.`, "success");
+            log(`Ya puedes cerrar esta ventana.`, "info");
+            document.getElementById('btnStart').innerText = "✅ TAREA FINALIZADA";
+          })
+          .withFailureHandler(function(err) {
+            log(`❌ Error al crear correo/respaldo: ${err.message}`, "error");
+            document.getElementById('btnStart').innerText = "⚠️ COMPLETADO CON ERRORES";
+          })
+          .generarRespaldoYEnviarCorreo();
+          
+        return;
+      }
+
+      var proy = listaProyectos[index];
+      var isFirst = (index === 0);
+      
+      log(`📂 Extrayendo: ${proy.nproyecto} (${index + 1}/${listaProyectos.length})...`);
+      
+      google.script.run
+        .withSuccessHandler(function(numViviendas) {
+          totalViviendas += numViviendas;
+          log(`   ➜ ✅ ${numViviendas} registros guardados.`, "success");
+          procesarSiguiente(index + 1); 
+        })
+        .withFailureHandler(function(err) {
+          log(`   ➜ ⚠️ Error en proyecto ${proy.nproyecto}: ${err.message}`, "error");
+          procesarSiguiente(index + 1);
+        })
+        .procesarProyectoGAS(tokenGlobal, proy.id_proy, isFirst);
+    }
+
+    function onError(err) {
+      log("❌ ERROR CRÍTICO: " + err.message, "error");
+      document.getElementById('btnStart').disabled = false;
+      document.getElementById('btnStart').innerText = "▶ REINTENTAR EXTRACCIÓN";
+    }
+  </script>
+</body>
+</html>
