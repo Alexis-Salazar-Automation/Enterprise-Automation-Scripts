@@ -230,7 +230,7 @@ function generarRespaldoYEnviarCorreo() {
   var timestampAsunto = Utilities.formatDate(new Date(), "GMT-6", "dd/MM/yyyy HH:mm");
   
   MailApp.sendEmail({
-    to: "aux.adm6@gph.mx,aux.adm4@gph.mx,aux.adm2@gph.mx",
+    to: "user1@example.com,user2@example.com,user3@example.com",
     subject: "✅ Cartera Post Venta Actualizada Exitosamente 📅 " + timestampAsunto,
     htmlBody: htmlBody,
     attachments: [blob]
