@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Fira+Code&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-color: #f4f7f9; --card-bg: #ffffff; --primary: #2563eb; --primary-hover: #1d4ed8;
+      --terminal-bg: #1e1e2e; --terminal-text: #a6accd; --terminal-accent: #a6e3a1;
+      --terminal-error: #f38ba8; --terminal-warn: #f9e2af; --text-main: #334155; --border: #e2e8f0;
+    }
+    body { font-family: 'Inter', sans-serif; background-color: var(--bg-color); color: var(--text-main); margin: 0; padding: 20px; display: flex; flex-direction: column; height: 100vh; box-sizing: border-box; }
+    .header { margin-bottom: 20px; }
+    .header h2 { margin: 0 0 5px 0; color: #0f172a; font-size: 20px; }
+    .header p { margin: 0; font-size: 13px; color: #64748b; }
+    .controls { background: var(--card-bg); padding: 15px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border: 1px solid var(--border); display: flex; gap: 15px; align-items: flex-end; margin-bottom: 20px; }
+    .input-group { flex: 1; display: flex; flex-direction: column; gap: 6px; }
+    .input-group label { font-size: 12px; font-weight: 600; color: #475569; }
+    .input-group input { padding: 9px; border: 1px solid var(--border); border-radius: 6px; font-family: 'Inter', sans-serif; font-size: 14px; outline: none; }
+    button { background: var(--primary); color: white; border: none; padding: 10px 20px; border-radius: 6px; font-family: 'Inter', font-weight: 600; font-size: 14px; cursor: pointer; height: 37px; }
+    button:hover:not(:disabled) { background: var(--primary-hover); transform: translateY(-1px); }
+    button:disabled { background: #94a3b8; cursor: not-allowed; transform: none; }
+    .terminal-container { flex: 1; background: var(--terminal-bg); border-radius: 8px; padding: 15px; font-family: 'Fira Code', monospace; font-size: 12px; line-height: 1.6; overflow-y: auto; box-shadow: inset 0 2px 10px rgba(0,0,0,0.5); display: flex; flex-direction: column; gap: 4px; }
+    .log-line { word-wrap: break-word; }
+    .log-time { color: #5c5f77; margin-right: 8px; }
+    .log-info { color: var(--terminal-text); }
+    .log-success { color: var(--terminal-accent); font-weight: 600;}
+    .log-error { color: var(--terminal-error); }
+    .log-warn { color: var(--terminal-warn); }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h2>📡 Motor de Extracción GPH</h2>
+    <p>Auditoría de llamadas de App Central Telefónica</p>
+  </div>
+  <div class="controls">
+    <div class="input-group">
+      <label for="fecha-desde">Fecha Inicio</label><input type="date" id="fecha-desde">
+    </div>
+    <div class="input-group">
+      <label for="fecha-hasta">Fecha Fin</label><input type="date" id="fecha-hasta">
+    </div>
+    <button id="btn-ejecutar" onclick="iniciarExtraccion()">EJECUTAR</button>
+  </div>
+  <div class="terminal-container" id="terminal">
+    <div class="log-line"><span class="log-time">System</span><span class="log-info">Esperando parámetros de ejecución...</span></div>
+  </div>
+
+  <script>
+    window.onload = function() {
+      const hoy = new Date().toISOString().split('T')[0];
+      document.getElementById('fecha-desde').value = hoy; document.getElementById('fecha-hasta').value = hoy;
+    };
+    const terminal = document.getElementById('terminal'), btnEjecutar = document.getElementById('btn-ejecutar');
+    function logger(mensaje, tipo = 'info') {
+      const time = new Date().toLocaleTimeString('es-MX', { hour12: false }), div = document.createElement('div');
+      div.className = 'log-line'; div.innerHTML = `<span class="log-time">[${time}]</span><span class="log-${tipo}">${mensaje}</span>`;
+      terminal.appendChild(div); terminal.scrollTop = terminal.scrollHeight;
+    }
+    function callServer(name, ...args) {
+      return new Promise((resolve, reject) => { google.script.run.withSuccessHandler(resolve).withFailureHandler(reject)[name](...args); });
+    }
+    function addDays(dateStr, days) {
+      const d = new Date(dateStr + "T12:00:00Z"); d.setDate(d.getDate() + days); return d.toISOString().split('T')[0];
+    }
+    async function iniciarExtraccion() {
+      const desde = document.getElementById('fecha-desde').value, hasta = document.getElementById('fecha-hasta').value;
+      if (desde > hasta) return logger("ERROR: Fecha de inicio mayor a la final.", "error");
+      btnEjecutar.disabled = true; btnEjecutar.innerText = "PROCESANDO..."; terminal.innerHTML = '';
+      logger(">>> INICIANDO SECUENCIA <<<", "warn");
+      try {
+        logger("Formateando hoja de cálculo..."); logger(await callServer('prepararHoja'), "success");
+        let current = desde, total = 0;
+        while (current <= hasta) {
+          logger(`> Descargando día: ${current}...`, "info");
+          try {
+            const guardados = await callServer('procesarDiaEspecial', current);
+            if (guardados > 0) { logger(`   ✓ Día ${current}: ${guardados} llamadas encontradas.`, "success"); total += guardados; }
+            else logger(`   - Día ${current}: Sin registros.`, "warn");
+          } catch (err) { logger(`   ✖ Error: ${err.message}`, "error"); }
+          current = addDays(current, 1);
+        }
+        logger(await callServer('finalizarHoja'), "success");
+        
+        // 🟢 PASO NUEVO: MANDAMOS GENERAR LAS TABLAS DESDE LA TERMINAL
+        logger("Construyendo Tablas Dinámicas (Dashboard)...", "warn");
+        logger(await callServer('generarTablasDinamicas'), "success");
+
+        logger(`=== EXTRACCIÓN FINALIZADA (${total} REGISTROS) ===`, "success");
+      } catch (e) { logger(`ERROR CRÍTICO: ${e.message}`, "error"); } 
+      finally { btnEjecutar.disabled = false; btnEjecutar.innerText = "EJECUTAR"; }
+    }
+  </script>
+</body>
+</html>
