@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <style>
+    body { margin: 0; padding: 0; background: #000; overflow: hidden; font-family: 'Courier New', Courier, monospace; color: #0F0; }
+    canvas { display: block; position: absolute; top: 0; left: 0; z-index: 1; opacity: 0.8; }
+    
+    #ui-container { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 10; background: rgba(0, 20, 0, 0.85); border: 2px solid #0F0; box-shadow: 0 0 20px #0F0; border-radius: 10px; width: 80%; max-width: 450px; padding: 30px; text-align: center; }
+    h2 { margin-top: 0; text-shadow: 0 0 10px #0F0; text-transform: uppercase; letter-spacing: 2px; }
+    #status-text { font-size: 14px; margin-bottom: 20px; min-height: 40px; }
+    
+    .progress-bar { width: 100%; height: 25px; background: #002200; border: 1px solid #0F0; border-radius: 5px; overflow: hidden; position: relative; }
+    .progress-fill { height: 100%; width: 0%; background: #0F0; box-shadow: 0 0 15px #0F0; transition: width 0.5s ease; }
+    .progress-text { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #000; font-weight: bold; mix-blend-mode: difference; color: white;}
+    
+    /* ESTILOS DEL NUEVO CRONÓMETRO */
+    #timer-container { display: none; margin-top: 20px; padding: 15px; border: 1px solid #F00; background: rgba(50, 0, 0, 0.8); border-radius: 5px; box-shadow: 0 0 15px #F00; color: #FFF; font-weight: bold; }
+    #countdown { font-size: 28px; color: #FF3333; text-shadow: 0 0 10px #F00; display: block; margin-top: 5px; }
+
+    button { display: none; margin-top: 20px; background: transparent; color: #0F0; border: 1px solid #0F0; padding: 10px 20px; cursor: pointer; font-family: 'Courier New'; font-weight: bold; text-transform: uppercase; transition: 0.3s; }
+    button:hover { background: #0F0; color: #000; box-shadow: 0 0 15px #0F0; }
+    .error-text { color: #F00 !important; text-shadow: 0 0 10px #F00 !important; }
+  </style>
+</head>
+<body>
+
+  <canvas id="matrix"></canvas>
+
+  <div id="ui-container">
+    <h2 id="titulo">Iniciando Enlace...</h2>
+    <div id="status-text">Estableciendo conexión encriptada...</div>
+    
+    <div class="progress-bar">
+      <div class="progress-fill" id="fill"></div>
+      <div class="progress-text" id="pct">0%</div>
+    </div>
+
+    <!-- EL NUEVO CRONÓMETRO VISUAL (ACTIVADO POR EL SERVIDOR) -->
+    <div id="timer-container">
+      🛑 SERVIDOR SATURADO - REINTENTO
+      <span id="countdown">00:30</span>
+      <span style="font-size: 11px; color: #ccc;">Esperando a que la API se libere para reintentar...</span>
+    </div>
+    
+    <button id="btn-close" onclick="google.script.host.close()">Cerrar Terminal</button>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('matrix');
+    const ctx = canvas.getContext('2d');
+    canvas.width = window.innerWidth; canvas.height = window.innerHeight;
+    const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789$+-*/=%""\'#&_(),.;:?!\\|{}<>[]^~';
+    const fontSize = 16;
+    const columns = canvas.width / fontSize;
+    const drops =[];
+    for(let x = 0; x < columns; x++) drops[x] = 1;
+
+    setInterval(() => {
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = '#0F0';
+      ctx.font = fontSize + 'px monospace';
+      for(let i = 0; i < drops.length; i++) {
+        const text = letters.charAt(Math.floor(Math.random() * letters.length));
+        ctx.fillText(text, i * fontSize, drops[i] * fontSize);
+        if(drops[i] * fontSize > canvas.height && Math.random() > 0.975) drops[i] = 0;
+        drops[i]++;
+      }
+    }, 33);
+
+    let progress = 0;
+    let progressInterval;
+    let statusInterval; // Intervalo para preguntar al servidor cómo va
+    let isFinished = false;
+    
+    const faseActual = parseInt("<?= fase ?>", 10);
+
+    window.onload = function() {
+      if(faseActual === 1) {
+        document.getElementById('titulo').innerText = "ETL: LECTURA DE CARTERA";
+        document.getElementById('status-text').innerText = "Extrayendo Lotes, Estatus y Asesores actuales...";
+        iniciarProgresoSimulado();
+        google.script.run.withSuccessHandler(onSuccess).withFailureHandler(onError).backendFase1();
+      } else if (faseActual === 2) {
+        document.getElementById('titulo').innerText = "EJECUCIÓN MASIVA UNIFICADA";
+        document.getElementById('status-text').innerText = "Iniciando protocolo. Procesando datos...";
+        iniciarProgresoSimulado();
+        iniciarPollingServidor(); // <-- INICIAMOS EL RADAR DE REINTENTOS
+        google.script.run.withSuccessHandler(onSuccess).withFailureHandler(onError).backendFase2();
+      } else if (faseActual === 3) {
+        document.getElementById('titulo').innerText = "AUDITORÍA FORENSE";
+        document.getElementById('status-text').innerText = "Rastreando huellas en la base de datos...";
+        iniciarProgresoSimulado();
+        google.script.run.withSuccessHandler(onSuccess).withFailureHandler(onError).backendFase3();
+      }
+    };
+
+    function iniciarProgresoSimulado() {
+      progressInterval = setInterval(() => {
+        if(document.getElementById('timer-container').style.display !== "block" && progress < 85) { 
+            progress += Math.floor(Math.random() * 5) + 1; 
+            updateBar(progress);
+        }
+      }, 400);
+    }
+
+    // 📡 EL RADAR (Pregunta cada 1 segundo qué hace el servidor)
+    function iniciarPollingServidor() {
+      statusInterval = setInterval(() => {
+         if (isFinished) return;
+         google.script.run.withSuccessHandler(function(res) {
+             if (!res) return;
+             
+             var parts = res.split("|");
+             var timerContainer = document.getElementById('timer-container');
+             var statusText = document.getElementById('status-text');
+             
+             if (parts[0] === 'UPDATING_STATUS') {
+                 timerContainer.style.display = "none";
+                 statusText.innerText = "🟢 Actualizando Estatus Masivos...";
+             } else if (parts[0] === 'ASSIGNING') {
+                 timerContainer.style.display = "none";
+                 statusText.innerText = "🟢 Procesando Asignaciones en la API...";
+             } else if (parts[0] === 'COOLDOWN') {
+                 // Entramos en modo Pánico Controlado
+                 timerContainer.style.display = "block";
+                 statusText.innerText = "Reintento Inteligente Activado...";
+                 
+                 var endTime = parseInt(parts[1], 10);
+                 var now = new Date().getTime();
+                 var remainingSecs = Math.ceil((endTime - now) / 1000);
+                 
+                 if (remainingSecs > 0) {
+                     var resS = remainingSecs % 60;
+                     document.getElementById('countdown').innerText = "00:" + (resS < 10 ? "0" + resS : resS);
+                 } else {
+                     timerContainer.style.display = "none";
+                 }
+             }
+         }).getBackendStatus();
+      }, 1000);
+    }
+
+    function updateBar(val) {
+      if(val > 100) val = 100;
+      document.getElementById('fill').style.width = val + '%';
+      document.getElementById('pct').innerText = val + '%';
+    }
+
+    function onSuccess(response) {
+      isFinished = true; 
+      clearInterval(progressInterval);
+      clearInterval(statusInterval);
+      if(response.error) { onError(response.error); return; }
+      
+      updateBar(100);
+      document.getElementById('timer-container').style.display = "none";
+      document.getElementById('status-text').innerHTML = "<strong style='color:#0F0; font-size:16px;'>" + response.success + "</strong>";
+      document.getElementById('btn-close').style.display = "inline-block";
+    }
+
+    function onError(err) {
+      isFinished = true; 
+      clearInterval(progressInterval);
+      clearInterval(statusInterval);
+      document.getElementById('titulo').innerText = "ERROR DE SISTEMA";
+      document.getElementById('titulo').className = "error-text";
+      document.getElementById('fill').style.background = "#F00";
+      document.getElementById('fill').style.boxShadow = "0 0 15px #F00";
+      document.getElementById('status-text').innerText = err;
+      document.getElementById('timer-container').style.display = "none";
+      document.getElementById('btn-close').style.display = "inline-block";
+    }
+  </script>
+</body>
+</html>
