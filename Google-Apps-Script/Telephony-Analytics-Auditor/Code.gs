@@ -2,7 +2,7 @@
 // 🚀 CONFIGURACIÓN GLOBAL
 // ==========================================
 const ID_ARCHIVO_CARTERA = 'YOUR_SPREADSHEET_ID_HERE'; 
-const API_BASE_URL = "https://api.your-company.com/index.php";
+const API_BASE_URL = "YOUR_API_URL";
 const RECIPIENT_EMAILS = ["manager@example.com"];
 
 function onOpen() {
@@ -32,7 +32,7 @@ function obtenerCredencialesGPH() {
   var credencialesDinamicas = { "googleId": "[aqui se obtiene el id]", "email": correoActivo, "name": nombreDerivado };
 
   try {
-    var resp = UrlFetchApp.fetch("https://api.your-company.com/index.php", {
+    var resp = UrlFetchApp.fetch("YOUR_API_URL", {
       "method": "post", "contentType": "application/json",
       "payload": JSON.stringify({"data": credencialesDinamicas}), "muteHttpExceptions": true
     });
@@ -52,18 +52,7 @@ function obtenerCredencialesGPH() {
 
 function prepararHoja() {
   var libro = SpreadsheetApp.getActiveSpreadsheet();
-  var cabeceras =[
-    "id_agenda", "fechaA", "fecha_operacion", "observaciones", "asunto", 
-    "respuesta", "id_tipoDescuento", "deudaStatus", "forma_pago", "cantidad", 
-    "meses_vencidos", "id_cobranza", "id_usuario", "status", "fecha_registro", 
-    "convenio", "id_asesor", "usuario_nombre", "medio", "baseneodata", 
-    "cliente_nombre", "vivienda", "cliente", "StatusTerreno", "tipo_descuento", 
-    "vivh", "folioPago", "monto_pago", "monto_comision", "cuotas_cubiertas", 
-    "fechaRecibido", "fpagodesde", "fpagohasta", "exibicion", "idestatusComision", 
-    "nestatusComision", "idSucursal", "idcomision", "Escomision", "ejecutivo", 
-    "Esevidencia", "evidenciasn", "GCS", 
-    "Fecha Corta", "Comentario App", "Duración llamada (s)", "Llamada Efectiva"
-  ];
+  var cabeceras =[COLUMNS_NAME];
 
   // Preparar Hoja APP
   var hojaApp = libro.getSheetByName("Reporte de Llamadas") || libro.insertSheet("Reporte de Llamadas");
@@ -111,18 +100,7 @@ function mapLlamadasEstandar(datosFiltrados) {
       llamadaEfectiva = "No";
     }
 
-    return [
-      d.id_agenda, d.fechaA, d.fecha_operacion, obs, d.asunto, 
-      d.respuesta, d.id_tipoDescuento, d.deudaStatus, d.forma_pago, d.cantidad, 
-      d.meses_vencidos, d.id_cobranza, d.id_usuario, d.status, d.fecha_registro, 
-      d.convenio, d.id_asesor, d.usuario_nombre, d.medio, d.baseneodata, 
-      d.cliente_nombre, d.vivienda, d.cliente, d.StatusTerreno, d.tipo_descuento, 
-      d.vivh, d.folioPago, d.monto_pago, d.monto_comision, d.cuotas_cubiertas, 
-      d.fechaRecibido, d.fpagodesde, d.fpagohasta, d.exibicion, d.idestatusComision, 
-      d.nestatusComision, d.idSucursal, d.idcomision, d.Escomision, d.ejecutivo, 
-      d.Esevidencia, d.evidenciasn, d.GCS, 
-      fechaCorta, comentarioApp, duracionS, llamadaEfectiva
-    ];
+    return [COLUMNS_RENAME];
   });
 }
 
@@ -175,15 +153,6 @@ function procesarDiaEspecial(fechaStr) {
   return filasApp.length + filasCC.length;
 }
 
-/*function finalizarHoja() {
-  var hoja = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Reporte de Llamadas");
-  hoja.getRange("B:C").setNumberFormat("yyyy-mm-dd hh:mm:ss");
-  hoja.getRange("AR:AR").setNumberFormat("dd/mm/yyyy"); 
-  hoja.autoResizeColumns(1, 47);
-  hoja.setFrozenRows(1);
-  return "✅ Formatos aplicados.";
-}*/
-
 function finalizarHoja() {
   var libro = SpreadsheetApp.getActiveSpreadsheet();
   
@@ -221,61 +190,6 @@ function generarTablasDinamicas() {
 
   return "✅ ¡Dashboards Creados! " + msjCorreo;
 }
-
-// Función auxiliar para construir Dashboards idénticos con 4 tablas
-/*function crearDashboardEstandar(libro, nombreHojaDatos, nombreHojaDash, titulo, colorFondo) {
-  var hojaDatos = libro.getSheetByName(nombreHojaDatos);
-  if (!hojaDatos || hojaDatos.getLastRow() <= 1) return; // Si no hay datos, saltar
-
-  var hojaTablas = libro.getSheetByName(nombreHojaDash) || libro.insertSheet(nombreHojaDash);
-  hojaTablas.clear();
-
-  var sourceData = hojaDatos.getDataRange();
-
-  // 🧮 CALCULAR TAMAÑO DINÁMICO PARA SEPARACIÓN PERFECTA
-  // Leer ejecutivos únicos para saber exactamente de qué tamaño será la tabla de arriba
-  var datosEjecutivos = hojaDatos.getRange(2, 18, hojaDatos.getLastRow() - 1, 1).getValues();
-  var unicos = {};
-  datosEjecutivos.forEach(function(row) {
-    var nombre = row[0] ? row[0].toString().trim() : "";
-    if (nombre) unicos[nombre] = true;
-  });
-  var numEjecutivos = Object.keys(unicos).length;
-  
-  // Matemáticas de espaciado: Deja exactamente 3 filas vacías de separación
-  var filaTituloBottom = numEjecutivos + 7;
-  var filaTablaBottom = numEjecutivos + 8;
-
-  // Tablas Superiores
-  var p1 = hojaTablas.getRange('A2').createPivotTable(sourceData);
-  p1.addRowGroup(18).showTotals(true); 
-  p1.addPivotValue(1, SpreadsheetApp.PivotTableSummarizeFunction.COUNTA).setDisplayName("Total Llamadas");
-  
-  var p2 = hojaTablas.getRange('E2').createPivotTable(sourceData);
-  p2.addRowGroup(18).showTotals(true); 
-  p2.addColumnGroup(44).showTotals(true);
-  p2.addPivotValue(1, SpreadsheetApp.PivotTableSummarizeFunction.COUNTA).setDisplayName("Total Llamadas");
-
-  // 🟢 Tablas Inferiores (Usando la Fila Calculada Dinámicamente)
-  var p3 = hojaTablas.getRange('A' + filaTablaBottom).createPivotTable(sourceData);
-  p3.addRowGroup(47).showTotals(true); 
-  p3.addPivotValue(1, SpreadsheetApp.PivotTableSummarizeFunction.COUNTA).setDisplayName("No. Llamadas");
-
-  var p4 = hojaTablas.getRange('E' + filaTablaBottom).createPivotTable(sourceData);
-  p4.addRowGroup(18).showTotals(true); 
-  p4.addColumnGroup(47).showTotals(true); 
-  p4.addPivotValue(1, SpreadsheetApp.PivotTableSummarizeFunction.COUNTA).setDisplayName("Total General");
-
-  // Títulos Superiores
-  hojaTablas.getRange("A1:B1").merge().setValue("📊 TOTAL LLAMADAS (" + titulo + ")").setFontWeight("bold").setBackground(colorFondo).setFontColor("white").setHorizontalAlignment("center");
-  hojaTablas.getRange("E1:J1").merge().setValue("📅 DETALLE DÍA A DÍA").setFontWeight("bold").setBackground(colorFondo).setFontColor("white").setHorizontalAlignment("center");
-  
-  // 🟢 Títulos Inferiores Dinámicos
-  hojaTablas.getRange("A" + filaTituloBottom + ":B" + filaTituloBottom).merge().setValue("🎯 RESUMEN EFECTIVIDAD").setFontWeight("bold").setBackground(colorFondo).setFontColor("white").setHorizontalAlignment("center");
-  hojaTablas.getRange("E" + filaTituloBottom + ":H" + filaTituloBottom).merge().setValue("🕵️‍♂️ DETALLE EFECTIVAS POR EJECUTIVO").setFontWeight("bold").setBackground(colorFondo).setFontColor("white").setHorizontalAlignment("center");
-  
-  hojaTablas.autoResizeColumns(1, 15);
-}*/
 
 function crearDashboardEstandar(libro, nombreHojaDatos, nombreHojaDash, titulo, colorFondo) {
   var hojaDatos = libro.getSheetByName(nombreHojaDatos);
@@ -356,7 +270,6 @@ function crearDashboardEstandar(libro, nombreHojaDatos, nombreHojaDash, titulo, 
   
   hojaTablas.autoResizeColumns(1, 15);
 }
-
 
 function generarResumenComparativo(libro) {
   var hojaResumen = libro.getSheetByName("Resumen Comparativo") || libro.insertSheet("Resumen Comparativo", 0);
