@@ -34,7 +34,7 @@ function mostrarConsola() {
 // FUNCIONES NÚCLEO (API)
 // =====================================================================
 function loginGAS() {
-  var url = "https://api-cobranza.gphsis.com/index.php/User/verificar_gmail";
+  var url = "https://api.your-company.com/index.php";
   var options = { method: "post", contentType: "application/json", payload: JSON.stringify(PAYLOAD_LOGIN), muteHttpExceptions: true };
   var resp = UrlFetchApp.fetch(url, options);
   var json = JSON.parse(resp.getContentText());
@@ -43,7 +43,7 @@ function loginGAS() {
 }
 
 function obtenerProyectosGAS(token) {
-  var url = "https://api-cobranza.gphsis.com/index.php/Catalogo/PVProyectos";
+  var url = "https://api.your-company.com/index.php";
   var options = { method: "post", contentType: "application/json", headers: { "authorization": token }, muteHttpExceptions: true };
   var resp = UrlFetchApp.fetch(url, options);
   var json = JSON.parse(resp.getContentText());
@@ -51,8 +51,8 @@ function obtenerProyectosGAS(token) {
 }
 
 function procesarProyectoGAS(token, idProy, isFirst) {
-  var urlCond = "https://api-cobranza.gphsis.com/index.php/PosVenta/Condominios/" + idProy;
-  var urlViv = "https://api-cobranza.gphsis.com/index.php/PosVenta/Viviendasxpersona";
+  var urlCond = "https://api.your-company.com/index.php/" + idProy;
+  var urlViv = "https://api.your-company.com/index.php";
   var optsBase = { method: "post", contentType: "application/json", headers: { "authorization": token }, muteHttpExceptions: true };
   
   optsBase.payload = JSON.stringify({ "idResidencial": idProy });
@@ -181,7 +181,7 @@ function generarRespaldoYEnviarCorreo() {
   var colorDiff = diff > 0 ? "#28a745" : (diff < 0 ? "#dc3545" : "#555");
   var signoDiff = diff > 0 ? "+" : "";
 
-    var idPublico = "1Z6zB6IZGMzQQDIcIEnFz8CTSTbwBAWOX6I2ORM9L6us";
+    var idPublico = "[id_sheets]";
   var urlPublica = "https://docs.google.com/spreadsheets/d/" + idPublico + "/edit";
 
   var htmlBody = `
