@@ -39,7 +39,7 @@ function obtenerToken() {
   // Se deriva un nombre a partir del correo
   var nombreDerivado = correoActivo.split('@')[0].replace(/\./g, ' ').toUpperCase();
   
-  var credencialesDinamicas = { "googleId": "0000000000000", "email": correoActivo, "name": nombreDerivado };
+  var credencialesDinamicas = { "googleId": "[Your_googleID]", "email": correoActivo, "name": nombreDerivado };
   var url = "https://api.your-company.com/index.php";
   
   try {
@@ -278,54 +278,3 @@ function backendFase3() {
 }
 
 
-function pruebaDeSeguridadAPI() {
-  // 1. Ponemos un correo válido (puede ser el tuyo)
-  var correoPrueba = "aux.adm6@gph.mx"; 
-  
-  // 2. Ponemos un Google ID completamente falso e inventado
-  var idFalso = "999999999999999999999"; 
-  var nombreFalso = "PRUEBA";
-
-  var payload = { 
-    "data": { 
-      "googleId": idFalso, 
-      "email": correoPrueba, 
-      "name": nombreFalso 
-    } 
-  };
-
-  var url = "https://api-cobranza.gphsis.com/index.php/User/verificar_gmail";
-
-  try {
-    var resp = UrlFetchApp.fetch(url, { 
-      "method": "post", 
-      "contentType": "application/json", 
-      "payload": JSON.stringify(payload), 
-      "muteHttpExceptions": true 
-    });
-    
-    var textoRespuesta = resp.getContentText();
-    var codigoEstado = resp.getResponseCode();
-    var jsonResp = JSON.parse(textoRespuesta);
-    
-    // Evaluamos el resultado
-    if (codigoEstado === 200 && jsonResp && jsonResp.data && jsonResp.data.token) {
-      // 🚨 EL SISTEMA FUE VULNERADO
-      SpreadsheetApp.getUi().alert(
-        "🚨 FALLA DE SEGURIDAD CONFIRMADA 🚨\n\n" +
-        "El servidor confió ciegamente. Nos dio un Token de acceso válido usando un ID completamente falso.\n\n" +
-        "Token obtenido: " + jsonResp.data.token.substring(0, 30) + "..."
-      );
-    } else {
-      // ✅ EL SISTEMA ES SEGURO
-      SpreadsheetApp.getUi().alert(
-        "✅ EL SISTEMA ES SEGURO ✅\n\n" +
-        "El servidor rechazó el acceso porque detectó que el ID no es correcto.\n\n" +
-        "Mensaje del servidor: " + textoRespuesta
-      );
-    }
-    
-  } catch(e) { 
-    SpreadsheetApp.getUi().alert("Error al intentar conectar: " + e.message);
-  }
-}
