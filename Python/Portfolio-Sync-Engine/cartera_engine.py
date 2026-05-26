@@ -49,7 +49,7 @@ def ejecutar_bot():
     try:
         # FASE 1: AUTENTICACIÓN
         print("🔑 Autenticando con la API...")
-        url_login = "https://api-cobranza.tu-empresa.com/index.php/User/verificar_gmail"
+        url_login = "[API_ENDPOINT]"
         if not API_LOGIN_PAYLOAD:
             raise Exception("Falta Secreto: API_LOGIN_PAYLOAD")
             
@@ -63,7 +63,7 @@ def ejecutar_bot():
 
         # FASE 2: DESCARGA DE DATOS
         print("📥 Descargando cartera completa...")
-        url_cartera = "https://api-cobranza.tu-empresa.com/index.php/Clientes/initCarteraClientes"
+        url_cartera = "[API_ENDPOINT]"
         headers = {"authorization": mi_token, "Content-Type": "application/json"}
         resp_cartera = session.post(url_cartera, headers=headers, json={"lotes": False, "get_ctes": True}, timeout=60)
         datos_cartera = resp_cartera.json()
@@ -74,14 +74,8 @@ def ejecutar_bot():
 
         # FASE 3: TRANSFORMACIÓN (PANDAS)
         print("🧹 Mapeando columnas y limpiando datos...")
-        cols_input = [
-            "clienteNombre", "proyecto", "RefMantenimiento", "ncondominio", "vivienda", 
-            "mesesadeudo", "totalAdeudo", "fultpago", "asesorNombre", "ugestion"
-        ]
-        cols_output = [
-            "NOMBRE", "PROYECTO", "REFERENCIA", "CONDOMINIO", "LOTE", 
-            "MESES_ADEUDO", "TOTAL", "ULTIMO_PAGO", "ASESOR", "ULTIMA_GESTION"
-        ]
+        cols_input = [COLUMNS_NAME]
+        cols_output = [COLUMNS_RENAME]
         
         df_final = df_completo[cols_input].copy()
         df_final.fillna("", inplace=True) 
